@@ -9,6 +9,7 @@ import MessageThread from './MessageThread';
 import ChatInputArea from './ChatInputArea';
 import ModelSelector from './ModelSelector';
 import { Separator } from '@/components/ui/separator';
+import { ModelAccess } from '@/types/frontend';
 
 const ChatInterface: React.FC = () => {
   const {
@@ -25,6 +26,34 @@ const ChatInterface: React.FC = () => {
   const [chatMode, setChatMode] = useState<'chat' | 'search'>('chat');
   const [selectedProvider, setSelectedProvider] = useState('openai');
   const [selectedModel, setSelectedModel] = useState('gpt-4.1-2025-04-14');
+
+  // Mock model access data - in a real app, this would come from an API
+  const mockModelAccess: ModelAccess[] = [
+    {
+      provider: 'openai',
+      modelName: 'gpt-4.1-2025-04-14',
+      isEnabled: true,
+      usagePercentage: 45,
+      remainingCredits: 15.30,
+      isOverLimit: false
+    },
+    {
+      provider: 'openai',
+      modelName: 'o3-2025-04-16',
+      isEnabled: true,
+      usagePercentage: 20,
+      remainingCredits: 25.80,
+      isOverLimit: false
+    },
+    {
+      provider: 'perplexity',
+      modelName: 'perplexity-sonar',
+      isEnabled: true,
+      usagePercentage: 60,
+      remainingCredits: 8.50,
+      isOverLimit: false
+    }
+  ];
 
   useEffect(() => {
     loadConversations();
@@ -68,6 +97,11 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  const handleModelSelect = (model: string, provider: string) => {
+    setSelectedModel(model);
+    setSelectedProvider(provider);
+  };
+
   const getPlaceholder = () => {
     return chatMode === 'search' 
       ? 'Search your knowledge base...' 
@@ -108,10 +142,10 @@ const ChatInterface: React.FC = () => {
             </Tabs>
             
             <ModelSelector
-              selectedProvider={selectedProvider}
+              modelAccess={mockModelAccess}
               selectedModel={selectedModel}
-              onProviderChange={setSelectedProvider}
-              onModelChange={setSelectedModel}
+              selectedProvider={selectedProvider}
+              onModelSelect={handleModelSelect}
             />
           </div>
         </div>

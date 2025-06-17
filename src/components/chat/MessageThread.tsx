@@ -3,7 +3,6 @@ import React, { useEffect, useRef } from 'react';
 import { ChatSession, MessageWithLoading } from '@/types/frontend';
 import { User, Bot, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 
 interface MessageThreadProps {
   session: ChatSession | null;

@@ -1,9 +1,10 @@
+
 import { Conversation, Message, UserApiAccess, DocumentUpload, ChatProvider } from './chat';
 
 // Frontend-specific interfaces for UI components
 export interface ChatSession {
   conversation: Conversation;
-  messages: Message[];
+  messages: MessageWithLoading[];
   isLoading: boolean;
   lastMessageAt?: string;
   unreadCount: number;

@@ -1,12 +1,15 @@
 
 import React from 'react';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import ChatInterface from '@/components/chat/ChatInterface';
 
 const ChatPage: React.FC = () => {
   return (
-    <div className="h-screen bg-background">
-      <ChatInterface />
-    </div>
+    <ProtectedRoute>
+      <div className="h-screen">
+        <ChatInterface />
+      </div>
+    </ProtectedRoute>
   );
 };
 

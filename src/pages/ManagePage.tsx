@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AnimatedTransition } from '@/components/AnimatedTransition';
 import { useAnimateIn } from '@/lib/animations';
@@ -11,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Check, Edit2, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Toaster } from 'sonner';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 const ManagePage = () => {
   const showContent = useAnimateIn(false, 300);
@@ -65,83 +65,85 @@ const ManagePage = () => {
   };
 
   return (
-    <div className="max-w-full mx-auto h-screen pt-24 pb-6">
-      <Toaster position="top-right" />
-      <AnimatedTransition show={showContent} animation="slide-up">
-        <div className="flex h-[calc(100vh-130px)]">
-          <CortexSidebar 
-            onCortexSelect={handleCortexSelect}
-            selectedCategoryId={selectedCategory}
-            selectedItemId={selectedItem}
-          />
-          <div className="flex-1 overflow-x-auto">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
-              {isEditing ? (
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={tempTitle}
-                    onChange={(e) => setTempTitle(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="h-8 text-xl font-semibold w-64"
-                    autoFocus
-                  />
-                  <Button size="icon" variant="ghost" onClick={handleSaveClick}>
-                    <Check size={18} className="text-green-500" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={handleCancelClick}>
-                    <X size={18} className="text-red-500" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold">{libraryTitle}</h2>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={handleEditClick}
-                    className="h-8 w-8"
-                  >
-                    <Edit2 size={14} />
-                  </Button>
-                </div>
-              )}
-              <TooltipProvider>
-                <ViewSwitcher activeView={viewType} onViewChange={setViewType} />
-              </TooltipProvider>
+    <ProtectedRoute>
+      <div className="h-screen flex bg-background">
+        <Toaster position="top-right" />
+        <AnimatedTransition show={showContent} animation="slide-up">
+          <div className="flex h-[calc(100vh-130px)]">
+            <CortexSidebar 
+              onCortexSelect={handleCortexSelect}
+              selectedCategoryId={selectedCategory}
+              selectedItemId={selectedItem}
+            />
+            <div className="flex-1 overflow-x-auto">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={tempTitle}
+                      onChange={(e) => setTempTitle(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="h-8 text-xl font-semibold w-64"
+                      autoFocus
+                    />
+                    <Button size="icon" variant="ghost" onClick={handleSaveClick}>
+                      <Check size={18} className="text-green-500" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={handleCancelClick}>
+                      <X size={18} className="text-red-500" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-semibold">{libraryTitle}</h2>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleEditClick}
+                      className="h-8 w-8"
+                    >
+                      <Edit2 size={14} />
+                    </Button>
+                  </div>
+                )}
+                <TooltipProvider>
+                  <ViewSwitcher activeView={viewType} onViewChange={setViewType} />
+                </TooltipProvider>
+              </div>
+              <CortexTable 
+                viewType={viewType} 
+                categoryId={selectedCategory}
+                cortexId={selectedItem}
+              />
             </div>
-            <CortexTable 
-              viewType={viewType} 
-              categoryId={selectedCategory}
-              cortexId={selectedItem}
-            />
           </div>
-        </div>
-      </AnimatedTransition>
+        </AnimatedTransition>
 
-      {/* Alternative: Dialog for editing title */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Library Title</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Input
-              value={tempTitle}
-              onChange={(e) => setTempTitle(e.target.value)}
-              className="w-full"
-              placeholder="Enter a title for your library"
-              autoFocus
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleDialogSave}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Alternative: Dialog for editing title */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Library Title</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Input
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                className="w-full"
+                placeholder="Enter a title for your library"
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleDialogSave}>Save</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </ProtectedRoute>
   );
 };
 

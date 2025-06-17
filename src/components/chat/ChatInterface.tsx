@@ -27,7 +27,7 @@ const ChatInterface: React.FC = () => {
   const [selectedProvider, setSelectedProvider] = useState('openai');
   const [selectedModel, setSelectedModel] = useState('gpt-4.1-2025-04-14');
 
-  // Mock model access data - in a real app, this would come from an API
+  // Mock model access data - this will be replaced with real data in Step 3
   const mockModelAccess: ModelAccess[] = [
     {
       provider: 'openai',
@@ -49,7 +49,7 @@ const ChatInterface: React.FC = () => {
     },
     {
       provider: 'perplexity',
-      modelName: 'perplexity-sonar',
+      modelName: 'llama-3.1-sonar-small-128k-online',
       isEnabled: true,
       usagePercentage: 60,
       remainingCredits: 8.50,
@@ -93,10 +93,10 @@ const ChatInterface: React.FC = () => {
       const title = chatMode === 'search' ? 'Search Session' : undefined;
       const newSession = await createConversation(title);
       if (newSession) {
-        await sendMessage(newSession.conversation.id, processedContent, selectedProvider, selectedModel);
+        await sendMessage(newSession.conversation.id, processedContent, selectedProvider, selectedModel, true);
       }
     } else {
-      await sendMessage(activeSession.conversation.id, processedContent, selectedProvider, selectedModel);
+      await sendMessage(activeSession.conversation.id, processedContent, selectedProvider, selectedModel, true);
     }
   };
 

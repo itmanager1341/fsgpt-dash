@@ -47,8 +47,10 @@ serve(async (req) => {
       message, 
       provider = 'openai', 
       model = 'gpt-4.1-2025-04-14',
-      stream = false 
+      stream = true 
     }: SendMessageRequest = await req.json()
+
+    console.log(`Processing message for conversation ${conversationId} with ${provider}:${model}`)
 
     // Store user message
     const { data: userMessage, error: userMessageError } = await supabaseClient
@@ -62,6 +64,7 @@ serve(async (req) => {
       .single()
 
     if (userMessageError) {
+      console.error('Error storing user message:', userMessageError)
       throw userMessageError
     }
 
@@ -99,6 +102,8 @@ serve(async (req) => {
     // Add current message
     contextMessages.push({ role: 'user', content: message })
 
+    console.log(`Calling ${provider} API with ${contextMessages.length} messages`)
+
     // Call LLM API
     const llmResponse = await fetch(apiUrl, {
       method: 'POST',
@@ -130,6 +135,8 @@ serve(async (req) => {
       const reader = llmResponse.body?.getReader()
       const decoder = new TextDecoder()
       let fullResponse = ''
+
+      console.log('Processing streaming response...')
 
       if (reader) {
         while (true) {
@@ -168,6 +175,8 @@ serve(async (req) => {
       usage = llmData.usage || {}
     }
 
+    console.log(`Generated response (${assistantMessage.length} chars)`)
+
     // Calculate cost (approximate)
     const promptTokens = usage.prompt_tokens || 0
     const completionTokens = usage.completion_tokens || 0
@@ -200,6 +209,7 @@ serve(async (req) => {
       .single()
 
     if (assistantMessageError) {
+      console.error('Error storing assistant message:', assistantMessageError)
       throw assistantMessageError
     }
 
@@ -208,6 +218,8 @@ serve(async (req) => {
       .from('conversations')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', conversationId)
+
+    console.log(`Message processed successfully. Cost: $${cost.toFixed(4)}`)
 
     return new Response(
       JSON.stringify({

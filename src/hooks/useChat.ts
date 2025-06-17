@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatSession, MessageWithLoading } from '@/types/frontend';
@@ -52,7 +51,13 @@ export const useChat = () => {
     }
   }, []);
 
-  const sendMessage = useCallback(async (conversationId: string, content: string, provider?: string, model?: string) => {
+  const sendMessage = useCallback(async (
+    conversationId: string, 
+    content: string, 
+    provider?: string, 
+    model?: string,
+    enableStreaming = true
+  ) => {
     // Create optimistic message first
     const optimisticMessage: MessageWithLoading = {
       id: `temp-${Date.now()}`,
@@ -66,6 +71,22 @@ export const useChat = () => {
       metadata: {},
       created_at: new Date().toISOString(),
       localId: `temp-${Date.now()}`,
+    };
+
+    // Create streaming assistant message placeholder
+    const streamingMessage: MessageWithLoading = {
+      id: `temp-assistant-${Date.now()}`,
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: '',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      cost: 0,
+      metadata: {},
+      created_at: new Date().toISOString(),
+      localId: `temp-assistant-${Date.now()}`,
+      isStreaming: true,
     };
 
     try {
@@ -95,12 +116,32 @@ export const useChat = () => {
         } : null);
       }
 
+      // Add streaming message placeholder if streaming is enabled
+      if (enableStreaming) {
+        setSessions(prev => prev.map(session => 
+          session.conversation.id === conversationId
+            ? {
+                ...session,
+                messages: [...session.messages, streamingMessage],
+              }
+            : session
+        ));
+
+        if (activeSession?.conversation.id === conversationId) {
+          setActiveSession(prev => prev ? {
+            ...prev,
+            messages: [...prev.messages, streamingMessage],
+          } : null);
+        }
+      }
+
       const response = await supabase.functions.invoke('send-message', {
         body: {
           conversationId,
           message: content,
           provider,
           model,
+          stream: enableStreaming,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -126,13 +167,16 @@ export const useChat = () => {
         created_at: assistantMessage.created_at,
       };
 
-      // Replace optimistic message with real messages
+      // Replace optimistic and streaming messages with real messages
       setSessions(prev => prev.map(session => 
         session.conversation.id === conversationId
           ? {
               ...session,
               messages: [
-                ...session.messages.filter(m => m.localId !== optimisticMessage.localId),
+                ...session.messages.filter(m => 
+                  m.localId !== optimisticMessage.localId && 
+                  m.localId !== streamingMessage.localId
+                ),
                 convertedUserMessage,
                 convertedAssistantMessage,
               ],
@@ -145,7 +189,10 @@ export const useChat = () => {
         setActiveSession(prev => prev ? {
           ...prev,
           messages: [
-            ...prev.messages.filter(m => m.localId !== optimisticMessage.localId),
+            ...prev.messages.filter(m => 
+              m.localId !== optimisticMessage.localId && 
+              m.localId !== streamingMessage.localId
+            ),
             convertedUserMessage,
             convertedAssistantMessage,
           ],
@@ -157,12 +204,15 @@ export const useChat = () => {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
       
-      // Remove optimistic message on error
+      // Remove optimistic and streaming messages on error
       setSessions(prev => prev.map(session => 
         session.conversation.id === conversationId
           ? {
               ...session,
-              messages: session.messages.filter(m => m.localId !== optimisticMessage.localId),
+              messages: session.messages.filter(m => 
+                m.localId !== optimisticMessage.localId && 
+                m.localId !== streamingMessage.localId
+              ),
               isLoading: false,
             }
           : session
@@ -171,7 +221,10 @@ export const useChat = () => {
       if (activeSession?.conversation.id === conversationId) {
         setActiveSession(prev => prev ? {
           ...prev,
-          messages: prev.messages.filter(m => m.localId !== optimisticMessage.localId),
+          messages: prev.messages.filter(m => 
+            m.localId !== optimisticMessage.localId && 
+            m.localId !== streamingMessage.localId
+          ),
           isLoading: false,
         } : null);
       }

@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Search, MessageSquare, Settings, BarChart3, Upload, User, LogOut, Sun, Moon } from 'lucide-react';
+import { Menu, X, MessageSquare, Settings, BarChart3, Upload, User, LogOut, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,7 +18,6 @@ const Navbar = () => {
   const isActive = (path: string) => location.pathname === path;
 
   const navigationItems = [
-    { name: 'Search', path: '/search', icon: Search },
     { name: 'Chat', path: '/chat', icon: MessageSquare },
     { name: 'Manage', path: '/manage', icon: BarChart3 },
     { name: 'Import', path: '/import', icon: Upload },

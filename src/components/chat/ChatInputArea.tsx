@@ -1,136 +1,93 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Send, Paperclip, Mic } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Send, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatInputAreaProps {
-  onSendMessage: (message: string) => void;
-  isLoading: boolean;
-  selectedModel: string;
-  selectedProvider: string;
+  onSendMessage: (content: string, provider?: string, model?: string) => void;
+  disabled?: boolean;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSendMessage,
-  isLoading,
-  selectedModel,
-  selectedProvider
+  disabled = false,
 }) => {
   const [message, setMessage] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isTyping, setIsTyping] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (message.trim() && !isLoading) {
+  const handleSend = () => {
+    if (message.trim() && !disabled) {
       onSendMessage(message.trim());
       setMessage('');
-      resetTextareaHeight();
+      setIsTyping(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      handleSend();
     }
   };
 
-  const resetTextareaHeight = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    setIsTyping(e.target.value.length > 0);
   };
-
-  const adjustTextareaHeight = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  };
-
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [message]);
 
   return (
-    <div className="p-4">
-      <form onSubmit={handleSubmit} className="relative">
-        <div className={cn(
-          "flex items-end gap-3 p-3 border rounded-2xl transition-all duration-200",
-          "bg-background shadow-sm",
-          isFocused ? "border-primary ring-2 ring-primary/20" : "border-border"
-        )}>
-          {/* Attachment Button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            disabled={isLoading}
-          >
-            <Paperclip size={18} />
-          </Button>
+    <div className="p-4 border-t bg-background">
+      <div className="flex items-end gap-3 max-w-4xl mx-auto">
+        {/* Attachment Button */}
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={disabled}
+          className="flex-shrink-0"
+        >
+          <Paperclip size={18} />
+        </Button>
 
-          {/* Text Input */}
-          <div className="flex-1">
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              placeholder="Type your message..."
-              className={cn(
-                "w-full resize-none border-0 bg-transparent",
-                "focus:outline-none focus:ring-0",
-                "placeholder:text-muted-foreground",
-                "min-h-[20px] max-h-[120px]"
-              )}
-              rows={1}
-              disabled={isLoading}
-            />
-          </div>
-
-          {/* Voice Input Button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            disabled={isLoading}
-          >
-            <Mic size={18} />
-          </Button>
-
-          {/* Send Button */}
-          <Button
-            type="submit"
-            size="icon"
+        {/* Message Input */}
+        <div className="flex-1 relative">
+          <Textarea
+            value={message}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Type your message..."
+            disabled={disabled}
             className={cn(
-              "h-8 w-8 transition-all duration-200",
-              message.trim() && !isLoading
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-muted text-muted-foreground cursor-not-allowed"
+              "min-h-[44px] max-h-32 resize-none pr-12",
+              "focus:ring-2 focus:ring-primary/20"
             )}
-            disabled={!message.trim() || isLoading}
-          >
-            <Send size={16} />
-          </Button>
+            rows={1}
+          />
+          
+          {/* Character count or typing indicator */}
+          {isTyping && (
+            <div className="absolute -bottom-5 right-0 text-xs text-muted-foreground">
+              {message.length} characters
+            </div>
+          )}
         </div>
 
-        {/* Model Info */}
-        <div className="flex items-center justify-between mt-2 px-1">
-          <div className="text-xs text-muted-foreground">
-            Using {selectedProvider} • {selectedModel}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {message.length > 0 && `${message.length} characters`}
-          </div>
-        </div>
-      </form>
+        {/* Send Button */}
+        <Button
+          onClick={handleSend}
+          disabled={disabled || !message.trim()}
+          size="icon"
+          className="flex-shrink-0"
+        >
+          <Send size={18} />
+        </Button>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground">
+        <span>Press Enter to send, Shift+Enter for new line</span>
+      </div>
     </div>
   );
 };

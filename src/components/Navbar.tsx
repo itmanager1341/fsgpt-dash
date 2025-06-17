@@ -13,7 +13,7 @@ const Navbar = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const { theme, toggleTheme } = useTheme();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, profile, signOut } = useAuth();
   const location = useLocation();
 
   const isActive = (path: string) => location.pathname === path;
@@ -27,11 +27,18 @@ const Navbar = () => {
 
   const handleSignOut = async () => {
     try {
-      logout();
+      await signOut();
     } catch (error) {
       console.error('Error signing out:', error);
     }
   };
+
+  // Show user status in navigation for approved users
+  const userStatusBadge = profile?.status === 'approved' ? (
+    <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+      Approved
+    </span>
+  ) : null;
 
   return (
     <>
@@ -48,26 +55,28 @@ const Navbar = () => {
               </Link>
             </div>
 
-            {/* Desktop navigation */}
-            <div className="hidden md:flex items-center space-x-4">
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.path}
-                    className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive(item.path)
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </div>
+            {/* Desktop navigation - only show for authenticated users */}
+            {isAuthenticated && (
+              <div className="hidden md:flex items-center space-x-4">
+                {navigationItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.path}
+                      className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActive(item.path)
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 mr-2" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Right side actions */}
             <div className="hidden md:flex items-center space-x-4">
@@ -82,6 +91,10 @@ const Navbar = () => {
 
               {isAuthenticated ? (
                 <div className="flex items-center space-x-2">
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    {profile?.first_name} {profile?.last_name}
+                    {userStatusBadge}
+                  </div>
                   <Link to="/profile">
                     <Button variant="ghost" size="icon">
                       <User className="h-4 w-4" />
@@ -138,7 +151,8 @@ const Navbar = () => {
         {isMenuOpen && (
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t">
-              {navigationItems.map((item) => {
+              {/* Navigation items - only show for authenticated users */}
+              {isAuthenticated && navigationItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link

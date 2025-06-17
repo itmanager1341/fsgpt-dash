@@ -967,33 +967,53 @@ export type Database = {
       }
       profiles: {
         Row: {
+          approval_requested_at: string | null
+          approved_at: string | null
+          approved_by: string | null
           avatar_url: string | null
           created_at: string
           email: string
           first_name: string | null
           id: string
           last_name: string | null
+          status: string | null
           updated_at: string
         }
         Insert: {
+          approval_requested_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           avatar_url?: string | null
           created_at?: string
           email: string
           first_name?: string | null
           id: string
           last_name?: string | null
+          status?: string | null
           updated_at?: string
         }
         Update: {
+          approval_requested_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           avatar_url?: string | null
           created_at?: string
           email?: string
           first_name?: string | null
           id?: string
           last_name?: string | null
+          status?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scheduled_job_settings: {
         Row: {

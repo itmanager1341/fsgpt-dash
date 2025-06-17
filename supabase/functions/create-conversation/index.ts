@@ -21,9 +21,10 @@ serve(async (req) => {
   try {
     console.log('=== CREATE CONVERSATION FUNCTION START ===')
     
+    // Create Supabase client with service role key to bypass RLS
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
         auth: {
           persistSession: false,
@@ -31,8 +32,9 @@ serve(async (req) => {
       }
     )
 
-    console.log('Supabase client created successfully')
+    console.log('Supabase client created successfully with service role')
 
+    // Still verify the user is authenticated via the auth header
     const authHeader = req.headers.get('Authorization')
     console.log('Auth header present:', !!authHeader)
     
@@ -47,7 +49,18 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '')
     console.log('Token extracted, length:', token.length)
     
-    const { data: user, error: authError } = await supabaseClient.auth.getUser(token)
+    // Create a separate client with anon key to verify the user token
+    const anonClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        auth: {
+          persistSession: false,
+        },
+      }
+    )
+    
+    const { data: user, error: authError } = await anonClient.auth.getUser(token)
     console.log('Auth result - user:', !!user.user, 'error:', authError)
 
     if (authError) {
@@ -88,6 +101,7 @@ serve(async (req) => {
 
     console.log('About to insert conversation with data:', conversationData)
 
+    // Use the service role client for the actual database operation
     const { data: conversation, error } = await supabaseClient
       .from('conversations')
       .insert(conversationData)

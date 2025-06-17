@@ -1,6 +1,7 @@
+
 import ProtectedRoute from '@/components/ProtectedRoute';
 import React from 'react';
-import ImportPanel from '@/components/import/ImportPanel';
+import ImportPanel from '@/components/ImportPanel';
 
 const Import = () => {
   return (

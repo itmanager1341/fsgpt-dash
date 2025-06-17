@@ -19,6 +19,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('=== CREATE CONVERSATION FUNCTION START ===')
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -29,16 +31,42 @@ serve(async (req) => {
       }
     )
 
-    const authHeader = req.headers.get('Authorization')!
-    const token = authHeader.replace('Bearer ', '')
-    const { data: user } = await supabaseClient.auth.getUser(token)
+    console.log('Supabase client created successfully')
 
-    if (!user.user) {
+    const authHeader = req.headers.get('Authorization')
+    console.log('Auth header present:', !!authHeader)
+    
+    if (!authHeader) {
+      console.log('ERROR: No authorization header')
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'No authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    const token = authHeader.replace('Bearer ', '')
+    console.log('Token extracted, length:', token.length)
+    
+    const { data: user, error: authError } = await supabaseClient.auth.getUser(token)
+    console.log('Auth result - user:', !!user.user, 'error:', authError)
+
+    if (authError) {
+      console.log('AUTH ERROR:', authError)
+      return new Response(
+        JSON.stringify({ error: 'Authentication failed', details: authError }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!user.user) {
+      console.log('ERROR: No user found in auth result')
+      return new Response(
+        JSON.stringify({ error: 'User not authenticated' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('User authenticated successfully:', user.user.id)
 
     const { 
       title = 'New Conversation',
@@ -46,23 +74,39 @@ serve(async (req) => {
       provider_preference = 'openai'
     }: CreateConversationRequest = await req.json()
 
+    console.log('Request payload:', { title, model_preference, provider_preference })
+
+    const conversationData = {
+      user_id: user.user.id,
+      title,
+      model_preference,
+      provider_preference,
+      status: 'active',
+      total_cost: 0,
+      metadata: {}
+    }
+
+    console.log('About to insert conversation with data:', conversationData)
+
     const { data: conversation, error } = await supabaseClient
       .from('conversations')
-      .insert({
-        user_id: user.user.id,
-        title,
-        model_preference,
-        provider_preference,
-        status: 'active',
-        total_cost: 0,
-        metadata: {}
-      })
+      .insert(conversationData)
       .select()
       .single()
 
+    console.log('Insert result - data:', !!conversation, 'error:', error)
+
     if (error) {
+      console.log('DATABASE ERROR DETAILS:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
       throw error
     }
+
+    console.log('Conversation created successfully:', conversation.id)
 
     return new Response(
       JSON.stringify({ conversation }),
@@ -70,9 +114,23 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error in create-conversation function:', error)
+    console.log('=== FUNCTION ERROR ===')
+    console.log('Error type:', typeof error)
+    console.log('Error message:', error.message)
+    console.log('Error details:', error.details)
+    console.log('Error hint:', error.hint)
+    console.log('Error code:', error.code)
+    console.log('Full error:', error)
+    console.log('=== END ERROR ===')
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        type: typeof error
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

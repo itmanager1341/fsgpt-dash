@@ -6,14 +6,14 @@ import { Button } from '@/components/ui/button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import AuthModal from './AuthModal';
-import WaitlistModal from './waitlist/WaitlistModal';
+import { WaitlistModal } from './waitlist/WaitlistModal';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const { theme, toggleTheme } = useTheme();
-  const { user, signOut } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const location = useLocation();
 
   const isActive = (path: string) => location.pathname === path;
@@ -27,7 +27,7 @@ const Navbar = () => {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      logout();
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -80,7 +80,7 @@ const Navbar = () => {
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
 
-              {user ? (
+              {isAuthenticated ? (
                 <div className="flex items-center space-x-2">
                   <Link to="/profile">
                     <Button variant="ghost" size="icon">
@@ -157,7 +157,7 @@ const Navbar = () => {
                 );
               })}
               
-              {user ? (
+              {isAuthenticated ? (
                 <>
                   <Link
                     to="/profile"

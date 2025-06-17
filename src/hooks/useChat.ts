@@ -112,6 +112,19 @@ export const useChat = () => {
 
       const { userMessage, assistantMessage } = response.data;
 
+      // Convert database messages to MessageWithLoading format
+      const convertedUserMessage: MessageWithLoading = {
+        ...userMessage,
+        metadata: userMessage.metadata || {},
+        created_at: userMessage.created_at,
+      };
+
+      const convertedAssistantMessage: MessageWithLoading = {
+        ...assistantMessage,
+        metadata: assistantMessage.metadata || {},
+        created_at: assistantMessage.created_at,
+      };
+
       // Replace optimistic message with real messages
       setSessions(prev => prev.map(session => 
         session.conversation.id === conversationId
@@ -119,8 +132,8 @@ export const useChat = () => {
               ...session,
               messages: [
                 ...session.messages.filter(m => m.localId !== optimisticMessage.localId),
-                userMessage,
-                assistantMessage,
+                convertedUserMessage,
+                convertedAssistantMessage,
               ],
               isLoading: false,
             }
@@ -132,8 +145,8 @@ export const useChat = () => {
           ...prev,
           messages: [
             ...prev.messages.filter(m => m.localId !== optimisticMessage.localId),
-            userMessage,
-            assistantMessage,
+            convertedUserMessage,
+            convertedAssistantMessage,
           ],
           isLoading: false,
         } : null);
@@ -176,7 +189,10 @@ export const useChat = () => {
       if (error) throw error;
 
       const sessionsData: ChatSession[] = conversations.map(conv => ({
-        conversation: conv,
+        conversation: {
+          ...conv,
+          status: conv.status as 'active' | 'archived' | 'deleted',
+        },
         messages: [],
         isLoading: false,
         unreadCount: 0,
@@ -202,16 +218,23 @@ export const useChat = () => {
 
       if (error) throw error;
 
+      // Convert database messages to MessageWithLoading format
+      const convertedMessages: MessageWithLoading[] = (messages || []).map(msg => ({
+        ...msg,
+        metadata: msg.metadata || {},
+        created_at: msg.created_at,
+      }));
+
       setSessions(prev => prev.map(session => 
         session.conversation.id === conversationId
-          ? { ...session, messages: messages || [] }
+          ? { ...session, messages: convertedMessages }
           : session
       ));
 
       if (activeSession?.conversation.id === conversationId) {
         setActiveSession(prev => prev ? {
           ...prev,
-          messages: messages || [],
+          messages: convertedMessages,
         } : null);
       }
 

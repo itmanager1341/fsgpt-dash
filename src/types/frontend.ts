@@ -20,8 +20,9 @@ export interface ChatSidebarItem {
   totalCost: number;
 }
 
-export interface MessageWithLoading extends Omit<Message, 'created_at'> {
+export interface MessageWithLoading extends Omit<Message, 'created_at' | 'metadata'> {
   created_at: string | Date;
+  metadata: Record<string, any>;
   isLoading?: boolean;
   isStreaming?: boolean;
   error?: string;

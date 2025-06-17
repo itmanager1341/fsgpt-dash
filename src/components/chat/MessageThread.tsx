@@ -142,19 +142,14 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
 
             {/* Model Badge for Assistant Messages */}
             {message.role === 'assistant' && (
-              <div className={cn(
-                message.role === 'user' ? "text-right" : ""
-              )}>
+              <div>
                 {getModelBadge(message)}
               </div>
             )}
 
             {/* Token Usage */}
             {message.role === 'assistant' && message.total_tokens && (
-              <div className={cn(
-                "text-xs text-muted-foreground",
-                message.role === 'user' ? "text-right" : ""
-              )}>
+              <div className="text-xs text-muted-foreground">
                 {message.total_tokens} tokens
                 {message.prompt_tokens && message.completion_tokens && (
                   <span className="ml-2">

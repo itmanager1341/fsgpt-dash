@@ -1,5 +1,4 @@
-
-import { Conversation, Message, UserApiAccess, DocumentUpload } from './chat';
+import { Conversation, Message, UserApiAccess, DocumentUpload, ChatProvider } from './chat';
 
 // Frontend-specific interfaces for UI components
 export interface ChatSession {

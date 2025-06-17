@@ -1,5 +1,5 @@
-
 import { ChatProvider, MessageRole } from './chat';
+import { ConversationWithMessages } from './utils';
 
 // API Request/Response types for edge functions
 export interface SendMessageRequest {

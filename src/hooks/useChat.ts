@@ -12,13 +12,17 @@ export const useChat = () => {
   const createConversation = useCallback(async (title?: string) => {
     try {
       setIsLoading(true);
+      console.log('Creating conversation with title:', title);
+      
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
+        console.error('No session found');
         toast.error('Please sign in to create a conversation');
         return null;
       }
 
+      console.log('Invoking create-conversation function...');
       const response = await supabase.functions.invoke('create-conversation', {
         body: { title },
         headers: {
@@ -26,11 +30,21 @@ export const useChat = () => {
         },
       });
 
+      console.log('Function response:', response);
+
       if (response.error) {
+        console.error('Function error:', response.error);
         throw response.error;
       }
 
+      if (!response.data || !response.data.conversation) {
+        console.error('Invalid response format:', response.data);
+        throw new Error('Invalid response format from server');
+      }
+
       const conversation: Conversation = response.data.conversation;
+      console.log('Conversation created:', conversation);
+      
       const newSession: ChatSession = {
         conversation,
         messages: [],

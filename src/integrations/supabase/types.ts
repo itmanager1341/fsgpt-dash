@@ -416,6 +416,110 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json | null
+          model_preference: string | null
+          provider_preference: string | null
+          status: string
+          title: string
+          total_cost: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          model_preference?: string | null
+          provider_preference?: string | null
+          status?: string
+          title?: string
+          total_cost?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          model_preference?: string | null
+          provider_preference?: string | null
+          status?: string
+          title?: string
+          total_cost?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_uploads: {
+        Row: {
+          conversation_id: string | null
+          file_name: string
+          file_size: number
+          file_type: string
+          id: string
+          metadata: Json | null
+          original_name: string
+          storage_path: string
+          upload_status: string
+          uploaded_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          file_name: string
+          file_size: number
+          file_type: string
+          id?: string
+          metadata?: Json | null
+          original_name: string
+          storage_path: string
+          upload_status?: string
+          uploaded_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string | null
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          metadata?: Json | null
+          original_name?: string
+          storage_path?: string
+          upload_status?: string
+          uploaded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_uploads_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_uploads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       editor_briefs: {
         Row: {
           content_variants: Json | null
@@ -707,6 +811,59 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          completion_tokens: number | null
+          content: string
+          conversation_id: string
+          cost: number | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          model_used: string | null
+          prompt_tokens: number | null
+          provider_used: string | null
+          role: string
+          total_tokens: number | null
+        }
+        Insert: {
+          completion_tokens?: number | null
+          content: string
+          conversation_id: string
+          cost?: number | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          model_used?: string | null
+          prompt_tokens?: number | null
+          provider_used?: string | null
+          role: string
+          total_tokens?: number | null
+        }
+        Update: {
+          completion_tokens?: number | null
+          content?: string
+          conversation_id?: string
+          cost?: number | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          model_used?: string | null
+          prompt_tokens?: number | null
+          provider_used?: string | null
+          role?: string
+          total_tokens?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       news: {
         Row: {
           byline_text: string | null
@@ -939,6 +1096,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      user_api_access: {
+        Row: {
+          created_at: string
+          current_usage: number
+          id: string
+          is_enabled: boolean
+          metadata: Json | null
+          model_name: string
+          monthly_limit: number
+          provider: string
+          updated_at: string
+          usage_period_start: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_usage?: number
+          id?: string
+          is_enabled?: boolean
+          metadata?: Json | null
+          model_name: string
+          monthly_limit?: number
+          provider: string
+          updated_at?: string
+          usage_period_start?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_usage?: number
+          id?: string
+          is_enabled?: boolean
+          metadata?: Json | null
+          model_name?: string
+          monthly_limit?: number
+          provider?: string
+          updated_at?: string
+          usage_period_start?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_api_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

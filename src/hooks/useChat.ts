@@ -223,6 +223,7 @@ export const useChat = () => {
       // Convert database messages to MessageWithLoading format
       const convertedMessages: MessageWithLoading[] = (messages || []).map(msg => ({
         ...msg,
+        role: msg.role as 'user' | 'assistant' | 'system',
         metadata: (msg.metadata as Record<string, any>) || {},
         created_at: msg.created_at,
       }));

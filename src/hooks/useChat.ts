@@ -53,6 +53,21 @@ export const useChat = () => {
   }, []);
 
   const sendMessage = useCallback(async (conversationId: string, content: string, provider?: string, model?: string) => {
+    // Create optimistic message first
+    const optimisticMessage: MessageWithLoading = {
+      id: `temp-${Date.now()}`,
+      conversation_id: conversationId,
+      role: 'user',
+      content,
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      cost: 0,
+      metadata: {},
+      created_at: new Date().toISOString(),
+      localId: `temp-${Date.now()}`,
+    };
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -62,20 +77,6 @@ export const useChat = () => {
       }
 
       // Add optimistic user message
-      const optimisticMessage: MessageWithLoading = {
-        id: `temp-${Date.now()}`,
-        conversation_id: conversationId,
-        role: 'user',
-        content,
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-        cost: 0,
-        metadata: {},
-        created_at: new Date().toISOString(),
-        localId: `temp-${Date.now()}`,
-      };
-
       setSessions(prev => prev.map(session => 
         session.conversation.id === conversationId
           ? {
@@ -115,13 +116,13 @@ export const useChat = () => {
       // Convert database messages to MessageWithLoading format
       const convertedUserMessage: MessageWithLoading = {
         ...userMessage,
-        metadata: userMessage.metadata || {},
+        metadata: (userMessage.metadata as Record<string, any>) || {},
         created_at: userMessage.created_at,
       };
 
       const convertedAssistantMessage: MessageWithLoading = {
         ...assistantMessage,
-        metadata: assistantMessage.metadata || {},
+        metadata: (assistantMessage.metadata as Record<string, any>) || {},
         created_at: assistantMessage.created_at,
       };
 
@@ -192,6 +193,7 @@ export const useChat = () => {
         conversation: {
           ...conv,
           status: conv.status as 'active' | 'archived' | 'deleted',
+          metadata: (conv.metadata as Record<string, any>) || {},
         },
         messages: [],
         isLoading: false,
@@ -221,7 +223,7 @@ export const useChat = () => {
       // Convert database messages to MessageWithLoading format
       const convertedMessages: MessageWithLoading[] = (messages || []).map(msg => ({
         ...msg,
-        metadata: msg.metadata || {},
+        metadata: (msg.metadata as Record<string, any>) || {},
         created_at: msg.created_at,
       }));
 

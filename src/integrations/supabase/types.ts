@@ -825,6 +825,7 @@ export type Database = {
           provider_used: string | null
           role: string
           total_tokens: number | null
+          user_id: string | null
         }
         Insert: {
           completion_tokens?: number | null
@@ -839,6 +840,7 @@ export type Database = {
           provider_used?: string | null
           role: string
           total_tokens?: number | null
+          user_id?: string | null
         }
         Update: {
           completion_tokens?: number | null
@@ -853,6 +855,7 @@ export type Database = {
           provider_used?: string | null
           role?: string
           total_tokens?: number | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -860,6 +863,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

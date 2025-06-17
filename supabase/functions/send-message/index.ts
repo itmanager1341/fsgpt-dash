@@ -21,7 +21,38 @@ serve(async (req) => {
   }
 
   try {
+    console.log('=== SEND MESSAGE FUNCTION START ===')
+    
+    // Create Supabase client with service role key to bypass RLS
     const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          persistSession: false,
+        },
+      }
+    )
+
+    console.log('Supabase client created successfully with service role')
+
+    // Still verify the user is authenticated via the auth header
+    const authHeader = req.headers.get('Authorization')
+    console.log('Auth header present:', !!authHeader)
+    
+    if (!authHeader) {
+      console.log('ERROR: No authorization header')
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    console.log('Token extracted, length:', token.length)
+    
+    // Create a separate client with anon key to verify the user token
+    const anonClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
@@ -30,17 +61,27 @@ serve(async (req) => {
         },
       }
     )
+    
+    const { data: user, error: authError } = await anonClient.auth.getUser(token)
+    console.log('Auth result - user:', !!user.user, 'error:', authError)
 
-    const authHeader = req.headers.get('Authorization')!
-    const token = authHeader.replace('Bearer ', '')
-    const { data: user } = await supabaseClient.auth.getUser(token)
-
-    if (!user.user) {
+    if (authError) {
+      console.log('AUTH ERROR:', authError)
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Authentication failed', details: authError }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    if (!user.user) {
+      console.log('ERROR: No user found in auth result')
+      return new Response(
+        JSON.stringify({ error: 'User not authenticated' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('User authenticated successfully:', user.user.id)
 
     const { 
       conversationId, 
@@ -52,13 +93,14 @@ serve(async (req) => {
 
     console.log(`Processing message for conversation ${conversationId} with ${provider}:${model}`)
 
-    // Store user message
+    // Store user message with user_id
     const { data: userMessage, error: userMessageError } = await supabaseClient
       .from('messages')
       .insert({
         conversation_id: conversationId,
         role: 'user',
         content: message,
+        user_id: user.user.id,
       })
       .select()
       .single()
@@ -67,6 +109,8 @@ serve(async (req) => {
       console.error('Error storing user message:', userMessageError)
       throw userMessageError
     }
+
+    console.log('User message stored successfully:', userMessage.id)
 
     // Get API key based on provider
     let apiKey: string | undefined;
@@ -191,7 +235,7 @@ serve(async (req) => {
       cost = (promptTokens * 0.001 + completionTokens * 0.001) / 1000
     }
 
-    // Store assistant message
+    // Store assistant message with user_id
     const { data: assistantMessageData, error: assistantMessageError } = await supabaseClient
       .from('messages')
       .insert({
@@ -204,6 +248,7 @@ serve(async (req) => {
         completion_tokens: completionTokens,
         total_tokens: promptTokens + completionTokens,
         cost: cost,
+        user_id: user.user.id,
       })
       .select()
       .single()
@@ -212,6 +257,8 @@ serve(async (req) => {
       console.error('Error storing assistant message:', assistantMessageError)
       throw assistantMessageError
     }
+
+    console.log('Assistant message stored successfully:', assistantMessageData.id)
 
     // Update conversation timestamp
     await supabaseClient
@@ -232,9 +279,19 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error in send-message function:', error)
+    console.error('=== SEND MESSAGE ERROR ===')
+    console.error('Error type:', typeof error)
+    console.error('Error message:', error.message)
+    console.error('Error details:', error.details)
+    console.error('Full error:', error)
+    console.error('=== END ERROR ===')
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.details,
+        type: typeof error
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

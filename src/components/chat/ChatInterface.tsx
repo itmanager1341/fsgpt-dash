@@ -35,6 +35,7 @@ const ChatInterface: React.FC = () => {
       isEnabled: true,
       usagePercentage: 45,
       remainingCredits: 15.30,
+      monthlyLimit: 50.00,
       isOverLimit: false
     },
     {
@@ -43,6 +44,7 @@ const ChatInterface: React.FC = () => {
       isEnabled: true,
       usagePercentage: 20,
       remainingCredits: 25.80,
+      monthlyLimit: 30.00,
       isOverLimit: false
     },
     {
@@ -51,6 +53,7 @@ const ChatInterface: React.FC = () => {
       isEnabled: true,
       usagePercentage: 60,
       remainingCredits: 8.50,
+      monthlyLimit: 20.00,
       isOverLimit: false
     }
   ];

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -13,14 +14,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Users, MessageSquare, DollarSign, CheckSquare, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Users, MessageSquare, DollarSign, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useAdminModelMatrix, UserModelMatrixData } from '@/hooks/useAdminModelMatrix';
 import { cn } from '@/lib/utils';
 
 const UserModelMatrix: React.FC = () => {
   const { matrixData, modelConfigs, isLoading, error, warnings, refetch, bulkUpdateAccess } = useAdminModelMatrix();
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
+  const [bulkOperationLoading, setBulkOperationLoading] = useState<string | null>(null);
 
   const enabledModels = modelConfigs.filter(m => m.is_globally_enabled);
 
@@ -45,7 +46,8 @@ const UserModelMatrix: React.FC = () => {
   const handleBulkModelToggle = async (provider: string, modelName: string, enabled: boolean) => {
     if (selectedUsers.size === 0) return;
 
-    setBulkOperationLoading(true);
+    const operationKey = `${provider}:${modelName}:${enabled}`;
+    setBulkOperationLoading(operationKey);
     try {
       await bulkUpdateAccess(
         Array.from(selectedUsers),
@@ -56,7 +58,7 @@ const UserModelMatrix: React.FC = () => {
     } catch (error) {
       // Error handling is done in the hook
     } finally {
-      setBulkOperationLoading(false);
+      setBulkOperationLoading(null);
     }
   };
 
@@ -71,6 +73,19 @@ const UserModelMatrix: React.FC = () => {
     } catch (error) {
       // Error handling is done in the hook
     }
+  };
+
+  const getModelBulkOperationStats = (provider: string, modelName: string) => {
+    const modelKey = `${provider}:${modelName}`;
+    const selectedUserData = matrixData.filter(user => selectedUsers.has(user.user_id));
+    
+    const enabledCount = selectedUserData.filter(user => 
+      user.model_access[modelKey]?.isEnabled
+    ).length;
+    
+    const disabledCount = selectedUsers.size - enabledCount;
+    
+    return { enabledCount, disabledCount };
   };
 
   const getUsageColor = (percentage: number, isOverLimit: boolean) => {
@@ -148,54 +163,20 @@ const UserModelMatrix: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Bulk Operations Panel */}
-      {selectedUsers.size > 0 && enabledModels.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckSquare size={20} />
-              Bulk Operations ({selectedUsers.size} users selected)
-            </CardTitle>
-            <CardDescription>
-              Apply model access changes to all selected users
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 flex-wrap">
-              {enabledModels.map((model) => (
-                <div key={`${model.provider}:${model.model_name}`} className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={bulkOperationLoading}
-                    onClick={() => handleBulkModelToggle(model.provider, model.model_name, true)}
-                  >
-                    Enable {model.display_name}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={bulkOperationLoading}
-                    onClick={() => handleBulkModelToggle(model.provider, model.model_name, false)}
-                  >
-                    Disable {model.display_name}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* User-Model Matrix */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users size={20} />
             User-Model Access Matrix
+            {selectedUsers.size > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {selectedUsers.size} users selected
+              </Badge>
+            )}
           </CardTitle>
           <CardDescription>
-            Manage model access for all users with inline usage analytics
+            Manage model access for all users with inline usage analytics. Select users and use the bulk operation buttons in each model column.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -217,14 +198,59 @@ const UserModelMatrix: React.FC = () => {
                     <TableHead>User</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Analytics</TableHead>
-                    {enabledModels.map((model) => (
-                      <TableHead key={`${model.provider}:${model.model_name}`} className="text-center min-w-[120px]">
-                        <div className="text-xs font-medium">{model.display_name}</div>
-                        <Badge variant="outline" className="text-xs">
-                          {model.provider}
-                        </Badge>
-                      </TableHead>
-                    ))}
+                    {enabledModels.map((model) => {
+                      const stats = selectedUsers.size > 0 ? getModelBulkOperationStats(model.provider, model.model_name) : null;
+                      const enableOperationKey = `${model.provider}:${model.model_name}:true`;
+                      const disableOperationKey = `${model.provider}:${model.model_name}:false`;
+                      
+                      return (
+                        <TableHead key={`${model.provider}:${model.model_name}`} className="text-center min-w-[140px]">
+                          <div className="space-y-2">
+                            <div>
+                              <div className="text-xs font-medium">{model.display_name}</div>
+                              <Badge variant="outline" className="text-xs">
+                                {model.provider}
+                              </Badge>
+                            </div>
+                            
+                            {selectedUsers.size > 0 && stats && (
+                              <div className="flex flex-col gap-1">
+                                {stats.disabledCount > 0 && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-xs"
+                                    disabled={bulkOperationLoading === enableOperationKey}
+                                    onClick={() => handleBulkModelToggle(model.provider, model.model_name, true)}
+                                  >
+                                    {bulkOperationLoading === enableOperationKey ? (
+                                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+                                    ) : (
+                                      `Enable ${stats.disabledCount}`
+                                    )}
+                                  </Button>
+                                )}
+                                {stats.enabledCount > 0 && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-xs"
+                                    disabled={bulkOperationLoading === disableOperationKey}
+                                    onClick={() => handleBulkModelToggle(model.provider, model.model_name, false)}
+                                  >
+                                    {bulkOperationLoading === disableOperationKey ? (
+                                      <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+                                    ) : (
+                                      `Disable ${stats.enabledCount}`
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </TableHead>
+                      );
+                    })}
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -260,6 +260,27 @@ serve(async (req) => {
 
     console.log('Assistant message stored successfully:', assistantMessageData.id)
 
+    // Update user API usage tracking
+    try {
+      const { error: usageError } = await supabaseClient
+        .rpc('update_user_api_usage', {
+          user_id_param: user.user.id,
+          provider_param: provider,
+          model_param: model,
+          cost_param: cost
+        })
+
+      if (usageError) {
+        console.error('Error updating usage:', usageError)
+        // Don't throw - usage tracking failure shouldn't break the message flow
+      } else {
+        console.log(`Usage updated: $${cost.toFixed(4)} for ${provider}:${model}`)
+      }
+    } catch (usageUpdateError) {
+      console.error('Error in usage update:', usageUpdateError)
+      // Don't throw - continue with message processing
+    }
+
     // Update conversation timestamp
     await supabaseClient
       .from('conversations')

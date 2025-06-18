@@ -1291,6 +1291,18 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_user_model_access: {
+        Args: { user_id_param: string }
+        Returns: {
+          provider: string
+          model_name: string
+          is_enabled: boolean
+          usage_percentage: number
+          remaining_credits: number
+          monthly_limit: number
+          is_over_limit: boolean
+        }[]
+      }
       halfvec_avg: {
         Args: { "": number[] }
         Returns: unknown
@@ -1329,6 +1341,10 @@ export type Database = {
       hnswhandler: {
         Args: { "": unknown }
         Returns: unknown
+      }
+      initialize_user_api_access: {
+        Args: { user_id_param: string }
+        Returns: undefined
       }
       ivfflat_bit_support: {
         Args: { "": unknown }
@@ -1435,6 +1451,15 @@ export type Database = {
           p_parameters: Json
         }
         Returns: string
+      }
+      update_user_api_usage: {
+        Args: {
+          user_id_param: string
+          provider_param: string
+          model_param: string
+          cost_param: number
+        }
+        Returns: undefined
       }
       vector_avg: {
         Args: { "": number[] }

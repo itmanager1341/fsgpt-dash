@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useChat } from '@/hooks/useChat';
+import { useUserApiAccess } from '@/hooks/useUserApiAccess';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MessageSquare, Search } from 'lucide-react';
@@ -9,7 +10,6 @@ import MessageThread from './MessageThread';
 import ChatInputArea from './ChatInputArea';
 import ModelSelector from './ModelSelector';
 import { Separator } from '@/components/ui/separator';
-import { ModelAccess } from '@/types/frontend';
 
 const ChatInterface: React.FC = () => {
   const {
@@ -23,40 +23,15 @@ const ChatInterface: React.FC = () => {
     setActiveSession,
   } = useChat();
 
+  const {
+    modelAccess,
+    isLoading: isLoadingAccess,
+    updateUsage,
+  } = useUserApiAccess();
+
   const [chatMode, setChatMode] = useState<'chat' | 'search'>('chat');
   const [selectedProvider, setSelectedProvider] = useState('openai');
   const [selectedModel, setSelectedModel] = useState('gpt-4.1-2025-04-14');
-
-  // Mock model access data - this will be replaced with real data in Step 3
-  const mockModelAccess: ModelAccess[] = [
-    {
-      provider: 'openai',
-      modelName: 'gpt-4.1-2025-04-14',
-      isEnabled: true,
-      usagePercentage: 45,
-      remainingCredits: 15.30,
-      monthlyLimit: 50.00,
-      isOverLimit: false
-    },
-    {
-      provider: 'openai',
-      modelName: 'o3-2025-04-16',
-      isEnabled: true,
-      usagePercentage: 20,
-      remainingCredits: 25.80,
-      monthlyLimit: 30.00,
-      isOverLimit: false
-    },
-    {
-      provider: 'perplexity',
-      modelName: 'llama-3.1-sonar-small-128k-online',
-      isEnabled: true,
-      usagePercentage: 60,
-      remainingCredits: 8.50,
-      monthlyLimit: 20.00,
-      isOverLimit: false
-    }
-  ];
 
   useEffect(() => {
     loadConversations();
@@ -67,6 +42,17 @@ const ChatInterface: React.FC = () => {
       loadMessages(activeSession.conversation.id);
     }
   }, [activeSession, loadMessages]);
+
+  // Update selected model when modelAccess data is loaded
+  useEffect(() => {
+    if (modelAccess.length > 0 && !selectedModel) {
+      const firstEnabledModel = modelAccess.find(m => m.isEnabled && !m.isOverLimit);
+      if (firstEnabledModel) {
+        setSelectedModel(firstEnabledModel.modelName);
+        setSelectedProvider(firstEnabledModel.provider);
+      }
+    }
+  }, [modelAccess, selectedModel]);
 
   const handleNewConversation = async () => {
     const title = chatMode === 'search' ? 'Search Session' : undefined;
@@ -111,6 +97,18 @@ const ChatInterface: React.FC = () => {
       : 'Type your message...';
   };
 
+  // Show loading state while API access data is being fetched
+  if (isLoadingAccess) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading model access...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex">
       {/* Sidebar */}
@@ -145,7 +143,7 @@ const ChatInterface: React.FC = () => {
             </Tabs>
             
             <ModelSelector
-              modelAccess={mockModelAccess}
+              modelAccess={modelAccess}
               selectedModel={selectedModel}
               selectedProvider={selectedProvider}
               onModelSelect={handleModelSelect}

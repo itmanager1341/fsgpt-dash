@@ -6,10 +6,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import UserApprovalGuard from "./components/UserApprovalGuard";
+import AdminRoute from "./components/AdminRoute";
 import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import ChatPage from "./pages/ChatPage";
 import ManagePage from "./pages/ManagePage";
+import AdminPage from "./pages/AdminPage";
 import Import from "./pages/Import";
 import HowPage from "./pages/HowPage";
 import WhyPage from "./pages/WhyPage";
@@ -35,6 +37,11 @@ const App = () => (
                     <Route path="/chat" element={<ChatPage />} />
                     <Route path="/search" element={<Navigate to="/chat" replace />} />
                     <Route path="/manage" element={<ManagePage />} />
+                    <Route path="/admin" element={
+                      <AdminRoute>
+                        <AdminPage />
+                      </AdminRoute>
+                    } />
                     <Route path="/import" element={<Import />} />
                     <Route path="/how" element={<HowPage />} />
                     <Route path="/why" element={<WhyPage />} />

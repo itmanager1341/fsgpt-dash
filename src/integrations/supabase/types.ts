@@ -876,6 +876,7 @@ export type Database = {
       }
       model_configurations: {
         Row: {
+          api_availability: string | null
           capabilities: Json | null
           cost_per_1k_tokens: number
           created_at: string
@@ -884,13 +885,17 @@ export type Database = {
           display_name: string
           display_order: number | null
           id: string
+          is_deprecated: boolean | null
           is_globally_enabled: boolean
+          last_pricing_update: string | null
           max_tokens: number | null
           model_name: string
+          pricing_source: string | null
           provider: string
           updated_at: string
         }
         Insert: {
+          api_availability?: string | null
           capabilities?: Json | null
           cost_per_1k_tokens?: number
           created_at?: string
@@ -899,13 +904,17 @@ export type Database = {
           display_name: string
           display_order?: number | null
           id?: string
+          is_deprecated?: boolean | null
           is_globally_enabled?: boolean
+          last_pricing_update?: string | null
           max_tokens?: number | null
           model_name: string
+          pricing_source?: string | null
           provider: string
           updated_at?: string
         }
         Update: {
+          api_availability?: string | null
           capabilities?: Json | null
           cost_per_1k_tokens?: number
           created_at?: string
@@ -914,9 +923,12 @@ export type Database = {
           display_name?: string
           display_order?: number | null
           id?: string
+          is_deprecated?: boolean | null
           is_globally_enabled?: boolean
+          last_pricing_update?: string | null
           max_tokens?: number | null
           model_name?: string
+          pricing_source?: string | null
           provider?: string
           updated_at?: string
         }
@@ -1019,6 +1031,53 @@ export type Database = {
             columns: ["published_article_id"]
             isOneToOne: false
             referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_history: {
+        Row: {
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          model_name: string
+          new_price: number
+          old_price: number | null
+          price_change_reason: string | null
+          provider: string
+          updated_by: string | null
+          updated_via: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          model_name: string
+          new_price: number
+          old_price?: number | null
+          price_change_reason?: string | null
+          provider: string
+          updated_by?: string | null
+          updated_via?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          model_name?: string
+          new_price?: number
+          old_price?: number | null
+          price_change_reason?: string | null
+          provider?: string
+          updated_by?: string | null
+          updated_via?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_history_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

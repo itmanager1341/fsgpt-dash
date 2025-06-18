@@ -28,6 +28,10 @@ export interface ModelConfigData {
   total_users_with_access: number;
   total_monthly_usage: number;
   api_key_status: string;
+  last_pricing_update?: string;
+  pricing_source?: string;
+  is_deprecated?: boolean;
+  api_availability?: string;
 }
 
 export const useAdminModelMatrix = () => {

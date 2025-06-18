@@ -874,6 +874,54 @@ export type Database = {
           },
         ]
       }
+      model_configurations: {
+        Row: {
+          capabilities: Json | null
+          cost_per_1k_tokens: number
+          created_at: string
+          default_monthly_limit: number
+          description: string | null
+          display_name: string
+          display_order: number | null
+          id: string
+          is_globally_enabled: boolean
+          max_tokens: number | null
+          model_name: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          capabilities?: Json | null
+          cost_per_1k_tokens?: number
+          created_at?: string
+          default_monthly_limit?: number
+          description?: string | null
+          display_name: string
+          display_order?: number | null
+          id?: string
+          is_globally_enabled?: boolean
+          max_tokens?: number | null
+          model_name: string
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          capabilities?: Json | null
+          cost_per_1k_tokens?: number
+          created_at?: string
+          default_monthly_limit?: number
+          description?: string | null
+          display_name?: string
+          display_order?: number | null
+          id?: string
+          is_globally_enabled?: boolean
+          max_tokens?: number | null
+          model_name?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       news: {
         Row: {
           byline_text: string | null
@@ -1217,9 +1265,33 @@ export type Database = {
         Args: { "": string } | { "": unknown }
         Returns: unknown
       }
+      bulk_update_user_model_access: {
+        Args: {
+          user_ids: string[]
+          provider_param: string
+          model_param: string
+          is_enabled_param: boolean
+          monthly_limit_param?: number
+        }
+        Returns: number
+      }
       get_active_api_key: {
         Args: { service_name: string }
         Returns: string
+      }
+      get_admin_model_overview: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          provider: string
+          model_name: string
+          display_name: string
+          is_globally_enabled: boolean
+          default_monthly_limit: number
+          cost_per_1k_tokens: number
+          total_users_with_access: number
+          total_monthly_usage: number
+          api_key_status: string
+        }[]
       }
       get_approval_stats: {
         Args: { start_date: string; end_date: string }
@@ -1301,6 +1373,18 @@ export type Database = {
           remaining_credits: number
           monthly_limit: number
           is_over_limit: boolean
+        }[]
+      }
+      get_user_model_matrix: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          user_id: string
+          user_email: string
+          user_name: string
+          user_status: string
+          total_monthly_usage: number
+          conversation_count: number
+          model_access: Json
         }[]
       }
       halfvec_avg: {

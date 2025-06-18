@@ -23,7 +23,7 @@ const AdminPage: React.FC = () => {
           </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users size={16} />
-            Users
+            Users & Models
           </TabsTrigger>
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <Activity size={16} />
@@ -54,7 +54,7 @@ const AdminPage: React.FC = () => {
               <CardDescription>Configure system-wide settings and preferences</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">Settings panel coming soon...</p>
+              <p className="text-muted-foreground">Additional system settings coming soon...</p>
             </CardContent>
           </Card>
         </TabsContent>

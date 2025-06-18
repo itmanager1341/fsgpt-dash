@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatSession, MessageWithLoading } from '@/types/frontend';
@@ -114,7 +113,7 @@ export const useChat = () => {
       cost: 0,
       metadata: {},
       created_at: new Date().toISOString(),
-      localId: `temp-${Date.now()}`,
+      localId: `temp-user-${Date.now()}`,
     };
 
     // Create streaming assistant message placeholder
@@ -211,6 +210,7 @@ export const useChat = () => {
             ? {
                 ...session,
                 messages: [
+                  // Keep all messages except the ones we're replacing
                   ...session.messages.filter(m => 
                     m.localId !== optimisticMessage.localId && 
                     m.localId !== streamingMessage.localId

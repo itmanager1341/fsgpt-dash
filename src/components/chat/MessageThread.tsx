@@ -62,7 +62,7 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
           <span className="bg-muted px-2 py-0.5 rounded">
             {message.provider_used} • {message.model_used}
           </span>
-          {message.cost && message.cost > 0 && (
+          {message.cost && message.cost > 0.0001 && (
             <span className="text-green-600 dark:text-green-400">
               ${message.cost.toFixed(4)}
             </span>
@@ -73,11 +73,22 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
     return null;
   };
 
+  // Generate unique keys that prioritize database IDs over local IDs
+  const generateMessageKey = (message: MessageWithLoading, index: number) => {
+    if (message.id && !message.id.startsWith('temp-')) {
+      return `db-${message.id}`;
+    }
+    if (message.localId) {
+      return `local-${message.localId}`;
+    }
+    return `fallback-${message.role}-${index}-${message.created_at}`;
+  };
+
   return (
     <div className="h-full overflow-y-auto p-4 space-y-6">
-      {session.messages.map((message) => (
+      {session.messages.map((message, index) => (
         <div
-          key={message.id || message.localId}
+          key={generateMessageKey(message, index)}
           className={cn(
             "flex gap-4 max-w-4xl",
             message.role === 'user' ? "ml-auto flex-row-reverse" : ""

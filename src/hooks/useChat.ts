@@ -94,6 +94,38 @@ export const useChat = () => {
     }
   }, [syncActiveSession]);
 
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .update({ status: 'deleted' })
+        .eq('id', conversationId);
+
+      if (error) throw error;
+
+      // Remove from sessions
+      setSessions(prev => {
+        const updated = prev.filter(session => session.conversation.id !== conversationId);
+        
+        // If we deleted the active session, set the first available session as active
+        if (activeSession?.conversation.id === conversationId) {
+          if (updated.length > 0) {
+            setActiveSession(updated[0]);
+          } else {
+            setActiveSession(null);
+          }
+        }
+        
+        return updated;
+      });
+
+      toast.success('Conversation deleted');
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast.error('Failed to delete conversation');
+    }
+  }, [activeSession]);
+
   const sendMessage = useCallback(async (
     conversationId: string, 
     content: string, 
@@ -332,5 +364,6 @@ export const useChat = () => {
     loadConversations,
     loadMessages,
     setActiveSession: setActiveSessionById,
+    deleteConversation,
   };
 };

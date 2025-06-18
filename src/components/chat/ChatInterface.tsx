@@ -23,6 +23,7 @@ const ChatInterface: React.FC = () => {
     loadConversations,
     loadMessages,
     setActiveSession,
+    deleteConversation,
   } = useChat();
 
   const {
@@ -65,6 +66,10 @@ const ChatInterface: React.FC = () => {
 
   const handleSelectConversation = (conversationId: string) => {
     setActiveSession(conversationId);
+  };
+
+  const handleDeleteConversation = (conversationId: string) => {
+    deleteConversation(conversationId);
   };
 
   const handleSendMessage = async (content: string) => {
@@ -114,11 +119,11 @@ const ChatInterface: React.FC = () => {
     <div className="h-screen flex">
       {/* Sidebar */}
       <div className={cn(
-        "border-r bg-background transition-all duration-300 ease-in-out",
+        "border-r bg-background transition-all duration-300 ease-in-out overflow-hidden",
         isCollapsed ? "w-0" : "w-80"
       )}>
         <div className={cn(
-          "h-full transition-opacity duration-300",
+          "h-full w-80 transition-opacity duration-300",
           isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100"
         )}>
           <ConversationSidebar
@@ -126,6 +131,7 @@ const ChatInterface: React.FC = () => {
             activeSession={activeSession}
             onNewConversation={handleNewConversation}
             onSelectConversation={handleSelectConversation}
+            onDeleteConversation={handleDeleteConversation}
             isLoading={isLoading}
           />
         </div>

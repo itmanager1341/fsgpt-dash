@@ -1,10 +1,19 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { ChatSession } from '@/types/frontend';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Plus, MessageSquare, Clock } from 'lucide-react';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Plus, MessageSquare, Clock, Trash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ConversationSidebarProps {
@@ -12,6 +21,7 @@ interface ConversationSidebarProps {
   activeSession: ChatSession | null;
   onNewConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
   isLoading: boolean;
 }
 
@@ -20,8 +30,12 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
   activeSession,
   onNewConversation,
   onSelectConversation,
+  onDeleteConversation,
   isLoading,
 }) => {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
+
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -65,6 +79,20 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
     return session.conversation.title;
   };
 
+  const handleDeleteClick = (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation();
+    setConversationToDelete(conversationId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (conversationToDelete) {
+      onDeleteConversation(conversationToDelete);
+      setDeleteDialogOpen(false);
+      setConversationToDelete(null);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -94,35 +122,49 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
             </div>
           ) : (
             sessions.map((session) => (
-              <Button
+              <div
                 key={session.conversation.id}
-                variant="ghost"
                 className={cn(
-                  "w-full p-3 h-auto text-left justify-start",
+                  "relative group rounded-md transition-colors",
                   activeSession?.conversation.id === session.conversation.id && "bg-accent"
                 )}
-                onClick={() => onSelectConversation(session.conversation.id)}
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-medium text-sm truncate">
-                      {getDisplayTitle(session)}
-                    </h3>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
-                      <Clock size={12} />
-                      {formatTimestamp(session.conversation.updated_at)}
+                <Button
+                  variant="ghost"
+                  className="w-full p-3 h-auto text-left justify-start rounded-md"
+                  onClick={() => onSelectConversation(session.conversation.id)}
+                >
+                  <div className="flex-1 min-w-0 pr-8">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-medium text-sm truncate">
+                        {getDisplayTitle(session)}
+                      </h3>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                        <Clock size={12} />
+                        {formatTimestamp(session.conversation.updated_at)}
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {getLastMessage(session)}
-                  </p>
-                  {session.conversation.total_cost > 0 && (
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      ${session.conversation.total_cost.toFixed(4)}
+                    <p className="text-xs text-muted-foreground truncate">
+                      {getLastMessage(session)}
                     </p>
-                  )}
-                </div>
-              </Button>
+                    {session.conversation.total_cost > 0 && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        ${session.conversation.total_cost.toFixed(4)}
+                      </p>
+                    )}
+                  </div>
+                </Button>
+                
+                {/* Delete Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => handleDeleteClick(e, session.conversation.id)}
+                >
+                  <Trash size={14} />
+                </Button>
+              </div>
             ))
           )}
         </div>
@@ -134,6 +176,29 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
       <div className="p-4 text-xs text-muted-foreground">
         {sessions.length} conversation{sessions.length !== 1 ? 's' : ''}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this conversation? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -2,14 +2,16 @@
 import React, { useEffect, useState } from 'react';
 import { useChat } from '@/hooks/useChat';
 import { useUserApiAccess } from '@/hooks/useUserApiAccess';
+import { useSidebar } from '@/hooks/useSidebar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { MessageSquare, Search } from 'lucide-react';
+import { MessageSquare, Search, Menu, X } from 'lucide-react';
 import ConversationSidebar from './ConversationSidebar';
 import MessageThread from './MessageThread';
 import ChatInputArea from './ChatInputArea';
 import ModelSelector from './ModelSelector';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 const ChatInterface: React.FC = () => {
   const {
@@ -28,6 +30,8 @@ const ChatInterface: React.FC = () => {
     isLoading: isLoadingAccess,
     updateUsage,
   } = useUserApiAccess();
+
+  const { isCollapsed, toggleSidebar } = useSidebar();
 
   const [chatMode, setChatMode] = useState<'chat' | 'search'>('chat');
   const [selectedProvider, setSelectedProvider] = useState('openai');
@@ -60,10 +64,7 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSelectConversation = (conversationId: string) => {
-    const session = sessions.find(s => s.conversation.id === conversationId);
-    if (session) {
-      setActiveSession(session);
-    }
+    setActiveSession(conversationId);
   };
 
   const handleSendMessage = async (content: string) => {
@@ -75,9 +76,9 @@ const ChatInterface: React.FC = () => {
     }
 
     if (!activeSession) {
-      // Create new conversation if none exists
+      // Create new conversation with the message content for better title generation
       const title = chatMode === 'search' ? 'Search Session' : undefined;
-      const newSession = await createConversation(title);
+      const newSession = await createConversation(title, content);
       if (newSession) {
         await sendMessage(newSession.conversation.id, processedContent, selectedProvider, selectedModel, true);
       }
@@ -112,35 +113,59 @@ const ChatInterface: React.FC = () => {
   return (
     <div className="h-screen flex">
       {/* Sidebar */}
-      <div className="w-80 border-r bg-background">
-        <ConversationSidebar
-          sessions={sessions}
-          activeSession={activeSession}
-          onNewConversation={handleNewConversation}
-          onSelectConversation={handleSelectConversation}
-          isLoading={isLoading}
-        />
+      <div className={cn(
+        "border-r bg-background transition-all duration-300 ease-in-out",
+        isCollapsed ? "w-0" : "w-80"
+      )}>
+        <div className={cn(
+          "h-full transition-opacity duration-300",
+          isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100"
+        )}>
+          <ConversationSidebar
+            sessions={sessions}
+            activeSession={activeSession}
+            onNewConversation={handleNewConversation}
+            onSelectConversation={handleSelectConversation}
+            isLoading={isLoading}
+          />
+        </div>
       </div>
 
-      <Separator orientation="vertical" />
-
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header with Mode Toggle and Model Selector */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header with Sidebar Toggle, Mode Toggle and Model Selector */}
         <div className="border-b bg-background p-4">
           <div className="flex items-center justify-between">
-            <Tabs value={chatMode} onValueChange={(value) => setChatMode(value as 'chat' | 'search')}>
-              <TabsList>
-                <TabsTrigger value="chat" className="flex items-center gap-2">
-                  <MessageSquare size={16} />
-                  Chat
-                </TabsTrigger>
-                <TabsTrigger value="search" className="flex items-center gap-2">
-                  <Search size={16} />
-                  Search
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-4">
+              {/* Sidebar Toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleSidebar}
+                className="flex items-center gap-2"
+              >
+                {isCollapsed ? <Menu size={16} /> : <X size={16} />}
+                <span className="hidden sm:inline">
+                  {isCollapsed ? 'Show' : 'Hide'} Sidebar
+                </span>
+              </Button>
+
+              <Separator orientation="vertical" className="h-6" />
+
+              {/* Mode Toggle */}
+              <Tabs value={chatMode} onValueChange={(value) => setChatMode(value as 'chat' | 'search')}>
+                <TabsList>
+                  <TabsTrigger value="chat" className="flex items-center gap-2">
+                    <MessageSquare size={16} />
+                    Chat
+                  </TabsTrigger>
+                  <TabsTrigger value="search" className="flex items-center gap-2">
+                    <Search size={16} />
+                    Search
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
             
             <ModelSelector
               modelAccess={modelAccess}

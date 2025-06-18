@@ -47,9 +47,22 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
   const getLastMessage = (session: ChatSession) => {
     if (session.messages.length === 0) return 'No messages yet';
     const lastMessage = session.messages[session.messages.length - 1];
-    return lastMessage.content.length > 50 
-      ? `${lastMessage.content.substring(0, 50)}...`
-      : lastMessage.content;
+    const content = lastMessage.content || '';
+    return content.length > 50 
+      ? `${content.substring(0, 50)}...`
+      : content;
+  };
+
+  const getDisplayTitle = (session: ChatSession) => {
+    // If title is "New Conversation" and we have messages, use first message as title
+    if (session.conversation.title === 'New Conversation' && session.messages.length > 0) {
+      const firstUserMessage = session.messages.find(m => m.role === 'user');
+      if (firstUserMessage) {
+        const content = firstUserMessage.content.replace(/^\[SEARCH MODE\]\s*Please search for and provide relevant information about:\s*/i, '').trim();
+        return content.length > 40 ? `${content.substring(0, 40)}...` : content;
+      }
+    }
+    return session.conversation.title;
   };
 
   return (
@@ -93,7 +106,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="font-medium text-sm truncate">
-                      {session.conversation.title}
+                      {getDisplayTitle(session)}
                     </h3>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
                       <Clock size={12} />

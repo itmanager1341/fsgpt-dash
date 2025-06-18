@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatSession, MessageWithLoading } from '@/types/frontend';
@@ -9,10 +10,28 @@ export const useChat = () => {
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const createConversation = useCallback(async (title?: string) => {
+  // Helper function to generate a title from message content
+  const generateTitleFromMessage = (content: string): string => {
+    const cleaned = content.replace(/^\[SEARCH MODE\]\s*Please search for and provide relevant information about:\s*/i, '').trim();
+    if (cleaned.length <= 40) return cleaned;
+    return cleaned.substring(0, 40) + '...';
+  };
+
+  // Helper function to sync active session with sessions array
+  const syncActiveSession = useCallback((updatedSessions: ChatSession[], activeSessionId?: string) => {
+    const targetId = activeSessionId || activeSession?.conversation.id;
+    if (targetId) {
+      const updatedActiveSession = updatedSessions.find(s => s.conversation.id === targetId);
+      if (updatedActiveSession) {
+        setActiveSession(updatedActiveSession);
+      }
+    }
+  }, [activeSession?.conversation.id]);
+
+  const createConversation = useCallback(async (title?: string, initialMessage?: string) => {
     try {
       setIsLoading(true);
-      console.log('Creating conversation with title:', title);
+      console.log('Creating conversation with title:', title, 'initialMessage:', initialMessage);
       
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -22,9 +41,14 @@ export const useChat = () => {
         return null;
       }
 
+      // Generate title from initial message if provided
+      const conversationTitle = initialMessage 
+        ? generateTitleFromMessage(initialMessage)
+        : (title || 'New Conversation');
+
       console.log('Invoking create-conversation function...');
       const response = await supabase.functions.invoke('create-conversation', {
-        body: { title },
+        body: { title: conversationTitle },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -52,7 +76,13 @@ export const useChat = () => {
         unreadCount: 0,
       };
 
-      setSessions(prev => [newSession, ...prev]);
+      // Update sessions and set as active
+      setSessions(prev => {
+        const updated = [newSession, ...prev];
+        syncActiveSession(updated, newSession.conversation.id);
+        return updated;
+      });
+      
       setActiveSession(newSession);
       return newSession;
 
@@ -63,7 +93,7 @@ export const useChat = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [syncActiveSession]);
 
   const sendMessage = useCallback(async (
     conversationId: string, 
@@ -111,42 +141,35 @@ export const useChat = () => {
         return;
       }
 
-      // Add optimistic user message
-      setSessions(prev => prev.map(session => 
-        session.conversation.id === conversationId
-          ? {
-              ...session,
-              messages: [...session.messages, optimisticMessage],
-              isLoading: true,
-            }
-          : session
-      ));
-
-      if (activeSession?.conversation.id === conversationId) {
-        setActiveSession(prev => prev ? {
-          ...prev,
-          messages: [...prev.messages, optimisticMessage],
-          isLoading: true,
-        } : null);
-      }
-
-      // Add streaming message placeholder if streaming is enabled
-      if (enableStreaming) {
-        setSessions(prev => prev.map(session => 
+      // Update both sessions and activeSession with optimistic user message
+      setSessions(prev => {
+        const updated = prev.map(session => 
           session.conversation.id === conversationId
             ? {
                 ...session,
-                messages: [...session.messages, streamingMessage],
+                messages: [...session.messages, optimisticMessage],
+                isLoading: true,
               }
             : session
-        ));
+        );
+        syncActiveSession(updated, conversationId);
+        return updated;
+      });
 
-        if (activeSession?.conversation.id === conversationId) {
-          setActiveSession(prev => prev ? {
-            ...prev,
-            messages: [...prev.messages, streamingMessage],
-          } : null);
-        }
+      // Add streaming message placeholder if streaming is enabled
+      if (enableStreaming) {
+        setSessions(prev => {
+          const updated = prev.map(session => 
+            session.conversation.id === conversationId
+              ? {
+                  ...session,
+                  messages: [...session.messages, streamingMessage],
+                }
+              : session
+          );
+          syncActiveSession(updated, conversationId);
+          return updated;
+        });
       }
 
       const response = await supabase.functions.invoke('send-message', {
@@ -182,68 +205,50 @@ export const useChat = () => {
       };
 
       // Replace optimistic and streaming messages with real messages
-      setSessions(prev => prev.map(session => 
-        session.conversation.id === conversationId
-          ? {
-              ...session,
-              messages: [
-                ...session.messages.filter(m => 
-                  m.localId !== optimisticMessage.localId && 
-                  m.localId !== streamingMessage.localId
-                ),
-                convertedUserMessage,
-                convertedAssistantMessage,
-              ],
-              isLoading: false,
-            }
-          : session
-      ));
-
-      if (activeSession?.conversation.id === conversationId) {
-        setActiveSession(prev => prev ? {
-          ...prev,
-          messages: [
-            ...prev.messages.filter(m => 
-              m.localId !== optimisticMessage.localId && 
-              m.localId !== streamingMessage.localId
-            ),
-            convertedUserMessage,
-            convertedAssistantMessage,
-          ],
-          isLoading: false,
-        } : null);
-      }
+      setSessions(prev => {
+        const updated = prev.map(session => 
+          session.conversation.id === conversationId
+            ? {
+                ...session,
+                messages: [
+                  ...session.messages.filter(m => 
+                    m.localId !== optimisticMessage.localId && 
+                    m.localId !== streamingMessage.localId
+                  ),
+                  convertedUserMessage,
+                  convertedAssistantMessage,
+                ],
+                isLoading: false,
+              }
+            : session
+        );
+        syncActiveSession(updated, conversationId);
+        return updated;
+      });
 
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
       
       // Remove optimistic and streaming messages on error
-      setSessions(prev => prev.map(session => 
-        session.conversation.id === conversationId
-          ? {
-              ...session,
-              messages: session.messages.filter(m => 
-                m.localId !== optimisticMessage.localId && 
-                m.localId !== streamingMessage.localId
-              ),
-              isLoading: false,
-            }
-          : session
-      ));
-
-      if (activeSession?.conversation.id === conversationId) {
-        setActiveSession(prev => prev ? {
-          ...prev,
-          messages: prev.messages.filter(m => 
-            m.localId !== optimisticMessage.localId && 
-            m.localId !== streamingMessage.localId
-          ),
-          isLoading: false,
-        } : null);
-      }
+      setSessions(prev => {
+        const updated = prev.map(session => 
+          session.conversation.id === conversationId
+            ? {
+                ...session,
+                messages: session.messages.filter(m => 
+                  m.localId !== optimisticMessage.localId && 
+                  m.localId !== streamingMessage.localId
+                ),
+                isLoading: false,
+              }
+            : session
+        );
+        syncActiveSession(updated, conversationId);
+        return updated;
+      });
     }
-  }, [activeSession]);
+  }, [syncActiveSession]);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -295,24 +300,28 @@ export const useChat = () => {
         created_at: msg.created_at,
       }));
 
-      setSessions(prev => prev.map(session => 
-        session.conversation.id === conversationId
-          ? { ...session, messages: convertedMessages }
-          : session
-      ));
-
-      if (activeSession?.conversation.id === conversationId) {
-        setActiveSession(prev => prev ? {
-          ...prev,
-          messages: convertedMessages,
-        } : null);
-      }
+      setSessions(prev => {
+        const updated = prev.map(session => 
+          session.conversation.id === conversationId
+            ? { ...session, messages: convertedMessages }
+            : session
+        );
+        syncActiveSession(updated, conversationId);
+        return updated;
+      });
 
     } catch (error) {
       console.error('Error loading messages:', error);
       toast.error('Failed to load messages');
     }
-  }, [activeSession]);
+  }, [syncActiveSession]);
+
+  const setActiveSessionById = useCallback((conversationId: string) => {
+    const session = sessions.find(s => s.conversation.id === conversationId);
+    if (session) {
+      setActiveSession(session);
+    }
+  }, [sessions]);
 
   return {
     sessions,
@@ -322,6 +331,6 @@ export const useChat = () => {
     sendMessage,
     loadConversations,
     loadMessages,
-    setActiveSession,
+    setActiveSession: setActiveSessionById,
   };
 };

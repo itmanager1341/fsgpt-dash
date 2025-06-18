@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -36,32 +35,113 @@ export const useAdminModelMatrix = () => {
   const [modelConfigs, setModelConfigs] = useState<ModelConfigData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+
+  const validateModelAccess = (modelAccess: any): Record<string, any> => {
+    if (!modelAccess || typeof modelAccess !== 'object') {
+      return {};
+    }
+    
+    // Ensure all model access entries have required properties
+    const validatedAccess: Record<string, any> = {};
+    
+    Object.entries(modelAccess).forEach(([key, value]: [string, any]) => {
+      if (value && typeof value === 'object') {
+        validatedAccess[key] = {
+          isEnabled: Boolean(value.isEnabled),
+          currentUsage: Number(value.currentUsage) || 0,
+          monthlyLimit: Number(value.monthlyLimit) || 20,
+          usagePercentage: Number(value.usagePercentage) || 0,
+          isOverLimit: Boolean(value.isOverLimit),
+        };
+      }
+    });
+    
+    return validatedAccess;
+  };
 
   const fetchMatrixData = async () => {
     try {
       setIsLoading(true);
       setError(null);
+      setWarnings([]);
 
-      const { data: matrixResult, error: matrixError } = await supabase.rpc('get_user_model_matrix');
-      const { data: configResult, error: configError } = await supabase.rpc('get_admin_model_overview');
+      // Fetch both datasets with individual error handling
+      const [matrixResponse, configResponse] = await Promise.allSettled([
+        supabase.rpc('get_user_model_matrix'),
+        supabase.rpc('get_admin_model_overview')
+      ]);
 
-      if (matrixError) throw matrixError;
-      if (configError) throw configError;
+      let hasWarnings = false;
 
-      // Type the data properly to handle the Json type from Supabase
-      const typedMatrixData = (matrixResult || []).map((row: any) => ({
-        ...row,
-        model_access: typeof row.model_access === 'string' 
-          ? JSON.parse(row.model_access) 
-          : row.model_access || {}
-      })) as UserModelMatrixData[];
+      // Handle matrix data
+      if (matrixResponse.status === 'fulfilled') {
+        const { data: matrixResult, error: matrixError } = matrixResponse.value;
+        
+        if (matrixError) {
+          console.error('Matrix data error:', matrixError);
+          setWarnings(prev => [...prev, `User matrix data failed to load: ${matrixError.message}`]);
+          hasWarnings = true;
+        } else {
+          // Process and validate matrix data
+          const typedMatrixData = (matrixResult || []).map((row: any) => {
+            let modelAccess = {};
+            
+            try {
+              modelAccess = typeof row.model_access === 'string' 
+                ? JSON.parse(row.model_access) 
+                : row.model_access || {};
+              
+              modelAccess = validateModelAccess(modelAccess);
+            } catch (parseError) {
+              console.warn('Failed to parse model_access for user:', row.user_id, parseError);
+              modelAccess = {};
+            }
 
-      setMatrixData(typedMatrixData);
-      setModelConfigs(configResult || []);
+            return {
+              ...row,
+              user_name: row.user_name || 'Unnamed User',
+              total_monthly_usage: Number(row.total_monthly_usage) || 0,
+              conversation_count: Number(row.conversation_count) || 0,
+              model_access: modelAccess
+            };
+          }) as UserModelMatrixData[];
+
+          setMatrixData(typedMatrixData);
+        }
+      } else {
+        console.error('Matrix fetch failed:', matrixResponse.reason);
+        setWarnings(prev => [...prev, 'Failed to fetch user matrix data']);
+        hasWarnings = true;
+      }
+
+      // Handle config data
+      if (configResponse.status === 'fulfilled') {
+        const { data: configResult, error: configError } = configResponse.value;
+        
+        if (configError) {
+          console.error('Config data error:', configError);
+          setWarnings(prev => [...prev, `Model configuration failed to load: ${configError.message}`]);
+          hasWarnings = true;
+        } else {
+          setModelConfigs(configResult || []);
+        }
+      } else {
+        console.error('Config fetch failed:', configResponse.reason);
+        setWarnings(prev => [...prev, 'Failed to fetch model configurations']);
+        hasWarnings = true;
+      }
+
+      // Show appropriate notifications
+      if (hasWarnings) {
+        toast.warning('Partial data loaded - some features may be limited');
+      }
+
     } catch (err) {
-      console.error('Error fetching matrix data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
-      toast.error('Failed to load user-model matrix');
+      console.error('Unexpected error fetching matrix data:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
+      setError(errorMessage);
+      toast.error('Failed to load admin matrix data');
     } finally {
       setIsLoading(false);
     }
@@ -131,6 +211,7 @@ export const useAdminModelMatrix = () => {
     modelConfigs,
     isLoading,
     error,
+    warnings,
     refetch: fetchMatrixData,
     bulkUpdateAccess,
     updateModelConfig,

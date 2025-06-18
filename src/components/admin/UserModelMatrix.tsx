@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -14,12 +13,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Users, MessageSquare, DollarSign, CheckSquare } from 'lucide-react';
+import { Users, MessageSquare, DollarSign, CheckSquare, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useAdminModelMatrix, UserModelMatrixData } from '@/hooks/useAdminModelMatrix';
 import { cn } from '@/lib/utils';
 
 const UserModelMatrix: React.FC = () => {
-  const { matrixData, modelConfigs, isLoading, bulkUpdateAccess } = useAdminModelMatrix();
+  const { matrixData, modelConfigs, isLoading, error, warnings, refetch, bulkUpdateAccess } = useAdminModelMatrix();
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
 
@@ -98,10 +97,59 @@ const UserModelMatrix: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-600">
+            <AlertTriangle size={20} />
+            Error Loading Matrix Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={refetch} variant="outline" className="flex items-center gap-2">
+            <RefreshCw size={16} />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (warnings.length > 0) {
+    return (
+      <Card className="border-yellow-200 bg-yellow-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-yellow-800">
+            <AlertTriangle size={20} />
+            Partial Data Loaded
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="text-yellow-700 text-sm space-y-1">
+            {warnings.map((warning, index) => (
+              <li key={index}>• {warning}</li>
+            ))}
+          </ul>
+          <Button 
+            onClick={refetch} 
+            variant="outline" 
+            size="sm" 
+            className="mt-3 flex items-center gap-2"
+          >
+            <RefreshCw size={14} />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Bulk Operations Panel */}
-      {selectedUsers.size > 0 && (
+      {selectedUsers.size > 0 && enabledModels.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -151,110 +199,116 @@ const UserModelMatrix: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedUsers.size === matrixData.length && matrixData.length > 0}
-                      onCheckedChange={(checked) => handleSelectAll(checked === true)}
-                    />
-                  </TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Analytics</TableHead>
-                  {enabledModels.map((model) => (
-                    <TableHead key={`${model.provider}:${model.model_name}`} className="text-center min-w-[120px]">
-                      <div className="text-xs font-medium">{model.display_name}</div>
-                      <Badge variant="outline" className="text-xs">
-                        {model.provider}
-                      </Badge>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {matrixData.map((user) => (
-                  <TableRow key={user.user_id}>
-                    <TableCell>
+          {matrixData.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No user data available. Check your database connection and permissions.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
                       <Checkbox
-                        checked={selectedUsers.has(user.user_id)}
-                        onCheckedChange={(checked) => handleUserSelection(user.user_id, checked === true)}
+                        checked={selectedUsers.size === matrixData.length && matrixData.length > 0}
+                        onCheckedChange={(checked) => handleSelectAll(checked === true)}
                       />
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{user.user_name || 'Unnamed User'}</div>
-                        <div className="text-sm text-muted-foreground">{user.user_email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(user.user_status)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1 text-sm">
-                          <DollarSign size={12} />
-                          ${user.total_monthly_usage.toFixed(2)}
+                    </TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Analytics</TableHead>
+                    {enabledModels.map((model) => (
+                      <TableHead key={`${model.provider}:${model.model_name}`} className="text-center min-w-[120px]">
+                        <div className="text-xs font-medium">{model.display_name}</div>
+                        <Badge variant="outline" className="text-xs">
+                          {model.provider}
+                        </Badge>
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {matrixData.map((user) => (
+                    <TableRow key={user.user_id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedUsers.has(user.user_id)}
+                          onCheckedChange={(checked) => handleUserSelection(user.user_id, checked === true)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{user.user_name}</div>
+                          <div className="text-sm text-muted-foreground">{user.user_email}</div>
                         </div>
-                        <div className="flex items-center gap-1 text-sm">
-                          <MessageSquare size={12} />
-                          {user.conversation_count} chats
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(user.user_status)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm">
+                            <DollarSign size={12} />
+                            ${user.total_monthly_usage.toFixed(2)}
+                          </div>
+                          <div className="flex items-center gap-1 text-sm">
+                            <MessageSquare size={12} />
+                            {user.conversation_count} chats
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    {enabledModels.map((model) => {
-                      const modelKey = `${model.provider}:${model.model_name}`;
-                      const access = user.model_access[modelKey];
-                      
-                      if (!access) {
+                      </TableCell>
+                      {enabledModels.map((model) => {
+                        const modelKey = `${model.provider}:${model.model_name}`;
+                        const access = user.model_access[modelKey];
+                        
+                        if (!access) {
+                          return (
+                            <TableCell key={modelKey} className="text-center">
+                              <Switch
+                                checked={false}
+                                onCheckedChange={(checked) =>
+                                  handleSingleUserToggle(user.user_id, model.provider, model.model_name, checked)
+                                }
+                              />
+                            </TableCell>
+                          );
+                        }
+
                         return (
                           <TableCell key={modelKey} className="text-center">
-                            <Switch
-                              checked={false}
-                              onCheckedChange={(checked) =>
-                                handleSingleUserToggle(user.user_id, model.provider, model.model_name, checked)
-                              }
-                            />
+                            <div className="space-y-2">
+                              <Switch
+                                checked={access.isEnabled}
+                                onCheckedChange={(checked) =>
+                                  handleSingleUserToggle(user.user_id, model.provider, model.model_name, checked)
+                                }
+                              />
+                              {access.isEnabled && (
+                                <>
+                                  <div className="text-xs text-muted-foreground">
+                                    ${access.currentUsage.toFixed(2)} / ${access.monthlyLimit.toFixed(2)}
+                                  </div>
+                                  <Progress
+                                    value={Math.min(access.usagePercentage, 100)}
+                                    className="h-1"
+                                  />
+                                  {access.isOverLimit && (
+                                    <div className="text-xs text-red-600 font-medium">
+                                      Over Limit
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </TableCell>
                         );
-                      }
-
-                      return (
-                        <TableCell key={modelKey} className="text-center">
-                          <div className="space-y-2">
-                            <Switch
-                              checked={access.isEnabled}
-                              onCheckedChange={(checked) =>
-                                handleSingleUserToggle(user.user_id, model.provider, model.model_name, checked)
-                              }
-                            />
-                            {access.isEnabled && (
-                              <>
-                                <div className="text-xs text-muted-foreground">
-                                  ${access.currentUsage.toFixed(2)} / ${access.monthlyLimit.toFixed(2)}
-                                </div>
-                                <Progress
-                                  value={Math.min(access.usagePercentage, 100)}
-                                  className="h-1"
-                                />
-                                {access.isOverLimit && (
-                                  <div className="text-xs text-red-600 font-medium">
-                                    Over Limit
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

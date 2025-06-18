@@ -158,7 +158,7 @@ const UserModelMatrix: React.FC = () => {
                   <TableHead className="w-12">
                     <Checkbox
                       checked={selectedUsers.size === matrixData.length && matrixData.length > 0}
-                      onCheckedChange={handleSelectAll}
+                      onCheckedChange={(checked) => handleSelectAll(checked === true)}
                     />
                   </TableHead>
                   <TableHead>User</TableHead>
@@ -180,7 +180,7 @@ const UserModelMatrix: React.FC = () => {
                     <TableCell>
                       <Checkbox
                         checked={selectedUsers.has(user.user_id)}
-                        onCheckedChange={(checked) => handleUserSelection(user.user_id, checked)}
+                        onCheckedChange={(checked) => handleUserSelection(user.user_id, checked === true)}
                       />
                     </TableCell>
                     <TableCell>

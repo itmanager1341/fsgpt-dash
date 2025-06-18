@@ -48,7 +48,15 @@ export const useAdminModelMatrix = () => {
       if (matrixError) throw matrixError;
       if (configError) throw configError;
 
-      setMatrixData(matrixResult || []);
+      // Type the data properly to handle the Json type from Supabase
+      const typedMatrixData = (matrixResult || []).map((row: any) => ({
+        ...row,
+        model_access: typeof row.model_access === 'string' 
+          ? JSON.parse(row.model_access) 
+          : row.model_access || {}
+      })) as UserModelMatrixData[];
+
+      setMatrixData(typedMatrixData);
       setModelConfigs(configResult || []);
     } catch (err) {
       console.error('Error fetching matrix data:', err);

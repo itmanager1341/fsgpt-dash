@@ -12,6 +12,9 @@ interface ProcessDocumentRequest {
   conversationId?: string;
 }
 
+// Import PDF parsing functionality
+const pdfParse = await import('https://esm.sh/pdf-parse@1.1.1');
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -88,49 +91,60 @@ serve(async (req) => {
       throw new Error('Failed to download document')
     }
 
+    console.log(`Downloaded file: ${document.original_name}, size: ${document.file_size} bytes`)
+
     // Convert to array buffer for PDF processing
     const arrayBuffer = await fileData.arrayBuffer()
     
-    // For now, we'll extract basic text (in production, you'd use a PDF parsing library)
-    // This is a simplified implementation - in reality you'd use pdf-parse or similar
     let extractedText = ''
     let summary = ''
+    let pageCount = 0
     
     try {
-      // Simulate PDF text extraction (replace with actual PDF parsing)
-      const decoder = new TextDecoder()
-      const potentialText = decoder.decode(arrayBuffer)
-      
-      // Very basic text extraction simulation
-      if (potentialText.includes('%PDF')) {
-        extractedText = `[PDF Processing] Document: ${document.original_name}\nSize: ${document.file_size} bytes\nThis is a PDF document that would be processed with a proper PDF parser in production.`
-        summary = `PDF document "${document.original_name}" uploaded and ready for analysis.`
+      if (document.file_type === 'application/pdf') {
+        console.log('Processing PDF document...')
+        
+        // Parse PDF using pdf-parse
+        const buffer = new Uint8Array(arrayBuffer)
+        const pdfData = await pdfParse.default(buffer)
+        
+        extractedText = pdfData.text || ''
+        pageCount = pdfData.numpages || 0
+        
+        console.log(`Extracted ${extractedText.length} characters from ${pageCount} pages`)
+
+        // Validate extraction quality
+        if (extractedText.length < 50) {
+          console.warn('Low text extraction quality - document may be image-based or corrupted')
+          summary = `PDF document "${document.original_name}" processed with limited text extraction. Document may contain primarily images or have extraction issues.`
+        } else {
+          // Generate summary from first 200 words
+          const words = extractedText.trim().split(/\s+/)
+          const firstWords = words.slice(0, 200).join(' ')
+          summary = `PDF document "${document.original_name}" (${pageCount} pages) successfully processed. Content preview: ${firstWords}${words.length > 200 ? '...' : ''}`
+        }
+
+        // Clean and validate text
+        extractedText = extractedText.trim()
+        if (!extractedText) {
+          throw new Error('No text content could be extracted from PDF')
+        }
+
       } else {
-        extractedText = potentialText.substring(0, 10000) // Limit text length
-        summary = `Document processed: ${document.original_name}`
+        // Handle non-PDF files (images, etc.)
+        console.log('Processing non-PDF document')
+        extractedText = `Non-PDF document: ${document.original_name}`
+        summary = `Document "${document.original_name}" uploaded but text extraction not supported for this file type.`
       }
-    } catch (error) {
-      console.error('Text extraction error:', error)
-      extractedText = `Document: ${document.original_name} - Text extraction pending proper PDF parser implementation.`
-      summary = `Document uploaded: ${document.original_name}`
+
+    } catch (extractionError) {
+      console.error('Text extraction error:', extractionError)
+      throw new Error(`Failed to extract text from document: ${extractionError.message}`)
     }
 
-    // Create text chunks (simplified chunking)
-    const chunkSize = 1000
-    const chunks = []
-    for (let i = 0; i < extractedText.length; i += chunkSize) {
-      const chunkContent = extractedText.substring(i, i + chunkSize)
-      chunks.push({
-        document_id: documentId,
-        chunk_index: Math.floor(i / chunkSize),
-        content: chunkContent,
-        word_count: chunkContent.split(' ').length,
-        metadata: {
-          start_char: i,
-          end_char: Math.min(i + chunkSize, extractedText.length)
-        }
-      })
-    }
+    // Create semantic text chunks with better boundaries
+    const chunks = createSemanticChunks(extractedText, documentId, pageCount)
+    console.log(`Created ${chunks.length} semantic chunks`)
 
     // Store chunks in database
     if (chunks.length > 0) {
@@ -144,13 +158,20 @@ serve(async (req) => {
       }
     }
 
-    // Update document with extracted text and summary
+    // Update document with extracted text and processing results
     const { error: updateError } = await supabaseClient
       .from('document_uploads')
       .update({
-        extracted_text: extractedText,
+        extracted_text: extractedText.length > 50000 ? extractedText.substring(0, 50000) + '...[truncated]' : extractedText,
         summary,
-        processing_status: 'completed'
+        processing_status: 'completed',
+        metadata: {
+          ...((document.metadata as Record<string, any>) || {}),
+          page_count: pageCount,
+          text_length: extractedText.length,
+          chunk_count: chunks.length,
+          processing_timestamp: new Date().toISOString()
+        }
       })
       .eq('id', documentId)
 
@@ -158,15 +179,17 @@ serve(async (req) => {
       throw updateError
     }
 
-    console.log(`Document ${documentId} processed successfully`)
+    console.log(`Document ${documentId} processed successfully - ${extractedText.length} chars, ${chunks.length} chunks`)
 
     return new Response(
       JSON.stringify({
         success: true,
         documentId,
         summary,
-        extractedText: extractedText.substring(0, 500) + '...',
-        chunksCreated: chunks.length
+        extractedText: extractedText.substring(0, 500) + (extractedText.length > 500 ? '...' : ''),
+        chunksCreated: chunks.length,
+        pageCount,
+        textLength: extractedText.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
@@ -182,7 +205,8 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       )
       
-      const { documentId } = await req.json()
+      const body = await req.json().catch(() => ({}))
+      const documentId = body.documentId
       if (documentId) {
         await supabaseClient
           .from('document_uploads')
@@ -205,3 +229,88 @@ serve(async (req) => {
     )
   }
 })
+
+// Helper function to create semantic chunks with better boundaries
+function createSemanticChunks(text: string, documentId: string, pageCount: number) {
+  const chunks = []
+  const targetChunkSize = 800 // Target words per chunk
+  const maxChunkSize = 1200 // Maximum words per chunk
+  
+  // Split text into paragraphs first
+  const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0)
+  
+  let currentChunk = ''
+  let currentWordCount = 0
+  let chunkIndex = 0
+  
+  for (const paragraph of paragraphs) {
+    const paragraphWords = paragraph.trim().split(/\s+/)
+    const paragraphWordCount = paragraphWords.length
+    
+    // If adding this paragraph would exceed max chunk size, create a new chunk
+    if (currentWordCount > 0 && (currentWordCount + paragraphWordCount) > maxChunkSize) {
+      if (currentChunk.trim()) {
+        chunks.push({
+          document_id: documentId,
+          chunk_index: chunkIndex++,
+          content: currentChunk.trim(),
+          word_count: currentWordCount,
+          metadata: {
+            start_word: Math.max(0, chunks.reduce((sum, c) => sum + c.word_count, 0)),
+            end_word: chunks.reduce((sum, c) => sum + c.word_count, 0) + currentWordCount,
+            chunk_type: 'semantic',
+            page_count: pageCount
+          }
+        })
+      }
+      currentChunk = paragraph
+      currentWordCount = paragraphWordCount
+    } else {
+      // Add paragraph to current chunk
+      if (currentChunk) {
+        currentChunk += '\n\n' + paragraph
+      } else {
+        currentChunk = paragraph
+      }
+      currentWordCount += paragraphWordCount
+    }
+    
+    // If current chunk reaches target size, create chunk
+    if (currentWordCount >= targetChunkSize) {
+      if (currentChunk.trim()) {
+        chunks.push({
+          document_id: documentId,
+          chunk_index: chunkIndex++,
+          content: currentChunk.trim(),
+          word_count: currentWordCount,
+          metadata: {
+            start_word: Math.max(0, chunks.reduce((sum, c) => sum + c.word_count, 0)),
+            end_word: chunks.reduce((sum, c) => sum + c.word_count, 0) + currentWordCount,
+            chunk_type: 'semantic',
+            page_count: pageCount
+          }
+        })
+      }
+      currentChunk = ''
+      currentWordCount = 0
+    }
+  }
+  
+  // Add final chunk if there's remaining content
+  if (currentChunk.trim()) {
+    chunks.push({
+      document_id: documentId,
+      chunk_index: chunkIndex++,
+      content: currentChunk.trim(),
+      word_count: currentWordCount,
+      metadata: {
+        start_word: Math.max(0, chunks.reduce((sum, c) => sum + c.word_count, 0)),
+        end_word: chunks.reduce((sum, c) => sum + c.word_count, 0) + currentWordCount,
+        chunk_type: 'semantic',
+        page_count: pageCount
+      }
+    })
+  }
+  
+  return chunks
+}

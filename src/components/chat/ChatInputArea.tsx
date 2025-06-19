@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Paperclip, X, FileText, Loader2 } from 'lucide-react';
+import { Send, Paperclip, X, FileText, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +20,9 @@ interface AttachedFile {
   processing?: boolean;
   processed?: boolean;
   summary?: string;
+  processingError?: string;
+  textLength?: number;
+  pageCount?: number;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -36,12 +39,16 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     if ((message.trim() || attachedFiles.length > 0) && !disabled) {
       let finalMessage = message.trim();
       
-      // Include processed document information
+      // Include processed document information with enhanced details
       const processedDocs = attachedFiles.filter(af => af.processed && af.summary);
       if (processedDocs.length > 0) {
-        const docInfo = processedDocs.map(doc => 
-          `Document: ${doc.file.name} - ${doc.summary}`
-        ).join('\n');
+        const docInfo = processedDocs.map(doc => {
+          let docDesc = `Document: ${doc.file.name}`;
+          if (doc.pageCount) docDesc += ` (${doc.pageCount} pages)`;
+          if (doc.textLength) docDesc += ` [${doc.textLength} characters extracted]`;
+          docDesc += ` - ${doc.summary}`;
+          return docDesc;
+        }).join('\n');
         finalMessage += `\n\n[Documents available for analysis:\n${docInfo}]`;
       }
       
@@ -127,6 +134,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         processing: false,
         processed: true,
         summary: processResult.summary,
+        textLength: processResult.textLength,
+        pageCount: processResult.pageCount,
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
       };
     } catch (error) {
@@ -182,14 +191,23 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             af.file === file ? processedFile : af
           ));
 
-          toast.success(`Document ${file.name} processed successfully`);
+          const successMsg = processedFile.pageCount 
+            ? `Document ${file.name} processed successfully (${processedFile.pageCount} pages, ${processedFile.textLength} characters extracted)`
+            : `Document ${file.name} processed successfully`;
+          
+          toast.success(successMsg);
         } catch (error) {
           console.error('Error processing document:', error);
           toast.error(`Failed to process ${file.name}: ${error.message}`);
           
           // Update file to show error state
           setAttachedFiles(prev => prev.map(af => 
-            af.file === file ? { ...af, processing: false, processed: false } : af
+            af.file === file ? { 
+              ...af, 
+              processing: false, 
+              processed: false, 
+              processingError: error.message 
+            } : af
           ));
         }
       }
@@ -213,38 +231,65 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     });
   };
 
+  const getFileStatusIcon = (attachedFile: AttachedFile) => {
+    if (attachedFile.processing) {
+      return <Loader2 size={16} className="animate-spin text-blue-500" />;
+    }
+    if (attachedFile.processingError) {
+      return <AlertCircle size={16} className="text-red-500" />;
+    }
+    if (attachedFile.processed) {
+      return <CheckCircle size={16} className="text-green-500" />;
+    }
+    if (attachedFile.file.type === 'application/pdf') {
+      return <FileText size={16} className="text-gray-500" />;
+    }
+    return <FileText size={16} className="text-gray-500" />;
+  };
+
+  const getFileStatusText = (attachedFile: AttachedFile) => {
+    if (attachedFile.processing) {
+      return "Processing PDF...";
+    }
+    if (attachedFile.processingError) {
+      return "Processing failed";
+    }
+    if (attachedFile.processed && attachedFile.pageCount && attachedFile.textLength) {
+      return `Ready - ${attachedFile.pageCount} pages, ${attachedFile.textLength} chars`;
+    }
+    if (attachedFile.processed) {
+      return "Ready for analysis";
+    }
+    return "Uploaded";
+  };
+
   return (
     <div className="p-4 border-t bg-background">
       {/* File Attachments Preview */}
       {attachedFiles.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2">
           {attachedFiles.map((attachedFile, index) => (
-            <div key={index} className="relative bg-muted rounded-lg p-2 flex items-center gap-2 max-w-64">
+            <div key={index} className="relative bg-muted rounded-lg p-3 flex items-center gap-3 max-w-80">
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                {attachedFile.processing ? (
-                  <Loader2 size={16} className="animate-spin text-blue-500" />
-                ) : attachedFile.file.type === 'application/pdf' ? (
-                  <FileText size={16} className={attachedFile.processed ? 'text-green-500' : 'text-gray-500'} />
-                ) : attachedFile.preview ? (
+                {attachedFile.preview ? (
                   <img 
                     src={attachedFile.preview} 
                     alt={attachedFile.file.name}
                     className="w-4 h-4 object-cover rounded"
                   />
                 ) : (
-                  <FileText size={16} className="text-gray-500" />
+                  getFileStatusIcon(attachedFile)
                 )}
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm truncate block">{attachedFile.file.name}</span>
-                  {attachedFile.processing && (
-                    <span className="text-xs text-blue-600">Processing...</span>
-                  )}
-                  {attachedFile.processed && attachedFile.summary && (
-                    <span className="text-xs text-green-600">Ready for analysis</span>
-                  )}
-                  {!attachedFile.processing && !attachedFile.processed && attachedFile.file.type === 'application/pdf' && (
-                    <span className="text-xs text-red-600">Processing failed</span>
-                  )}
+                  <span className="text-sm font-medium truncate block">{attachedFile.file.name}</span>
+                  <span className={cn(
+                    "text-xs",
+                    attachedFile.processing ? "text-blue-600" : 
+                    attachedFile.processingError ? "text-red-600" :
+                    attachedFile.processed ? "text-green-600" : "text-gray-600"
+                  )}>
+                    {getFileStatusText(attachedFile)}
+                  </span>
                 </div>
               </div>
               <Button
@@ -320,7 +365,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground">
         <span>Press Enter to send, Shift+Enter for new line</span>
         {attachedFiles.length > 0 && (
-          <span>• {attachedFiles.length} file(s) attached</span>
+          <span>• {attachedFiles.filter(af => af.processed).length}/{attachedFiles.length} documents ready</span>
         )}
       </div>
     </div>

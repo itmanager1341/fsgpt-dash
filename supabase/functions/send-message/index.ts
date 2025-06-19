@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -92,17 +93,14 @@ serve(async (req) => {
 
     console.log(`Processing message for conversation ${conversationId} with ${provider}:${model}`)
 
-    // Check if message references documents
+    // Enhanced document context retrieval
+    let documentContext = ''
     const documentReferences = message.match(/\[Documents available for analysis:(.*?)\]/s);
-    let documentContext = '';
     
     if (documentReferences) {
-      console.log('Document references found, fetching document content...');
+      console.log('Document references found, fetching enhanced document content...');
       
-      // Extract document information from the message
-      const docInfo = documentReferences[1];
-      
-      // Get documents associated with this conversation or user
+      // Get processed documents with full text content
       const { data: documents, error: docError } = await supabaseClient
         .from('document_uploads')
         .select(`
@@ -110,42 +108,69 @@ serve(async (req) => {
           original_name,
           summary,
           extracted_text,
-          document_chunks (
+          metadata,
+          document_chunks!inner (
             content,
             chunk_index,
-            word_count
+            word_count,
+            metadata
           )
         `)
         .eq('user_id', user.user.id)
         .eq('processing_status', 'completed')
         .order('created_at', { ascending: false })
-        .limit(5); // Limit to recent documents
+        .limit(3); // Get 3 most recent documents
 
       if (!docError && documents && documents.length > 0) {
-        console.log(`Found ${documents.length} processed documents`);
+        console.log(`Found ${documents.length} processed documents with real content`);
         
-        // Build document context for the AI
-        documentContext = '\n\n--- DOCUMENT CONTEXT ---\n';
-        documents.forEach(doc => {
-          documentContext += `\nDocument: ${doc.original_name}\n`;
+        // Build enhanced document context
+        documentContext = '\n\n=== DOCUMENT ANALYSIS CONTEXT ===\n';
+        
+        documents.forEach((doc, docIndex) => {
+          documentContext += `\n--- DOCUMENT ${docIndex + 1}: ${doc.original_name} ---\n`;
+          
           if (doc.summary) {
             documentContext += `Summary: ${doc.summary}\n`;
           }
           
-          // Include first few chunks for context
+          // Include metadata if available
+          const metadata = doc.metadata as Record<string, any> || {};
+          if (metadata.page_count) {
+            documentContext += `Pages: ${metadata.page_count}\n`;
+          }
+          if (metadata.text_length) {
+            documentContext += `Text Length: ${metadata.text_length} characters\n`;
+          }
+          
+          // Include chunks with the most relevant content
           if (doc.document_chunks && doc.document_chunks.length > 0) {
-            const contextChunks = doc.document_chunks
+            const sortedChunks = doc.document_chunks
               .sort((a, b) => a.chunk_index - b.chunk_index)
-              .slice(0, 3); // First 3 chunks
+              .slice(0, 5); // First 5 chunks for context
             
-            contextChunks.forEach(chunk => {
-              documentContext += `Content excerpt: ${chunk.content.substring(0, 500)}...\n`;
+            documentContext += `\nContent Excerpts:\n`;
+            sortedChunks.forEach((chunk, chunkIndex) => {
+              documentContext += `\n[Chunk ${chunk.chunk_index + 1}] ${chunk.content}\n`;
+              if (chunkIndex < sortedChunks.length - 1) {
+                documentContext += '---\n';
+              }
             });
           } else if (doc.extracted_text) {
-            documentContext += `Content excerpt: ${doc.extracted_text.substring(0, 1000)}...\n`;
+            // Fallback to extracted text if chunks not available
+            const textPreview = doc.extracted_text.length > 3000 
+              ? doc.extracted_text.substring(0, 3000) + '...[Content continues]'
+              : doc.extracted_text;
+            documentContext += `\nFull Content:\n${textPreview}\n`;
           }
+          
+          documentContext += `\n--- END DOCUMENT ${docIndex + 1} ---\n`;
         });
-        documentContext += '--- END DOCUMENT CONTEXT ---\n\n';
+        
+        documentContext += '\n=== END DOCUMENT CONTEXT ===\n\n';
+        console.log(`Built document context: ${documentContext.length} characters`);
+      } else {
+        console.log('No processed documents found or error:', docError);
       }
     }
 
@@ -199,11 +224,24 @@ serve(async (req) => {
       content: msg.content
     }))
 
-    // Add system message for document analysis if we have document context
+    // Enhanced system message for document analysis
     if (documentContext) {
+      const systemMessage = `You are an AI assistant specialized in document analysis and question answering. You have access to the user's uploaded documents and can provide detailed analysis, summaries, and answer specific questions about the content.
+
+When analyzing documents:
+- Reference specific sections, pages, or content when answering questions
+- Cite which document you're referencing when multiple documents are available
+- Provide accurate quotes and paraphrases from the actual document content
+- If asked about something not in the documents, clearly state that the information is not available in the provided documents
+
+You have access to the following document content:
+${documentContext}
+
+Please analyze the documents and provide helpful, accurate responses based on the actual content provided above.`;
+
       contextMessages.unshift({
         role: 'system',
-        content: `You are an AI assistant that can analyze documents. When users ask questions about uploaded documents, use the provided document context to give accurate, specific answers. Always cite which document you're referencing when possible.${documentContext}`
+        content: systemMessage
       });
     }
 

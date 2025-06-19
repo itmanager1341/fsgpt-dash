@@ -12,8 +12,11 @@ interface ProcessDocumentRequest {
   conversationId?: string;
 }
 
-// Import PDF parsing functionality
-const pdfParse = await import('https://esm.sh/pdf-parse@1.1.1');
+// Import PDF.js for Deno environment
+const { getDocument, GlobalWorkerOptions } = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/+esm');
+
+// Set up PDF.js worker
+GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -102,16 +105,43 @@ serve(async (req) => {
     
     try {
       if (document.file_type === 'application/pdf') {
-        console.log('Processing PDF document...')
+        console.log('Processing PDF document with PDF.js...')
         
-        // Parse PDF using pdf-parse
-        const buffer = new Uint8Array(arrayBuffer)
-        const pdfData = await pdfParse.default(buffer)
+        // Process PDF using PDF.js
+        const uint8Array = new Uint8Array(arrayBuffer)
+        const loadingTask = getDocument({ data: uint8Array })
+        const pdfDocument = await loadingTask.promise
         
-        extractedText = pdfData.text || ''
-        pageCount = pdfData.numpages || 0
+        pageCount = pdfDocument.numPages
+        console.log(`PDF has ${pageCount} pages`)
         
-        console.log(`Extracted ${extractedText.length} characters from ${pageCount} pages`)
+        // Extract text from each page
+        const pageTexts = []
+        for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+          try {
+            const page = await pdfDocument.getPage(pageNum)
+            const textContent = await page.getTextContent()
+            
+            // Combine text items with proper spacing
+            const pageText = textContent.items
+              .map((item: any) => item.str)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+            
+            if (pageText) {
+              pageTexts.push(pageText)
+            }
+            
+            console.log(`Extracted ${pageText.length} characters from page ${pageNum}`)
+          } catch (pageError) {
+            console.warn(`Error processing page ${pageNum}:`, pageError)
+            // Continue with other pages
+          }
+        }
+        
+        extractedText = pageTexts.join('\n\n').trim()
+        console.log(`Total extracted text: ${extractedText.length} characters from ${pageCount} pages`)
 
         // Validate extraction quality
         if (extractedText.length < 50) {
@@ -125,7 +155,6 @@ serve(async (req) => {
         }
 
         // Clean and validate text
-        extractedText = extractedText.trim()
         if (!extractedText) {
           throw new Error('No text content could be extracted from PDF')
         }

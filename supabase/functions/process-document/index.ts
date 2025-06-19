@@ -2,6 +2,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// Import PDF.js for Deno - using minified build for reliability
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'
+
+// Configure PDF.js worker at module level
+const workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -58,7 +65,7 @@ serve(async (req) => {
       )
     }
 
-    const { documentId, conversationId }: ProcessDocumentRequest = await req.json()
+    const { documentId }: ProcessDocumentRequest = await req.json()
     console.log(`Processing document ${documentId} for user ${user.user.id}`)
 
     // Get document record
@@ -73,11 +80,7 @@ serve(async (req) => {
       throw new Error('Document not found or access denied')
     }
 
-    // Update status to processing
-    await supabaseClient
-      .from('document_uploads')
-      .update({ processing_status: 'processing' })
-      .eq('id', documentId)
+    console.log(`Found document: ${document.original_name}, type: ${document.file_type}`)
 
     // Download file from storage
     const { data: fileData, error: downloadError } = await supabaseClient.storage
@@ -96,46 +99,60 @@ serve(async (req) => {
     let extractedText = ''
     let summary = ''
     let pageCount = 0
+    let chunks: any[] = []
     
     try {
       if (document.file_type === 'application/pdf') {
         console.log('Processing PDF document with PDF.js...')
-        
-        // Import PDF.js dynamically inside the handler
-        const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/+esm')
-        
-        // Set up PDF.js worker safely
-        if (pdfjs.GlobalWorkerOptions) {
-          pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
-        }
+        console.log('PDF.js module loaded:', typeof pdfjsLib, 'getDocument available:', typeof pdfjsLib.getDocument)
         
         // Process PDF using PDF.js
         const uint8Array = new Uint8Array(arrayBuffer)
-        const loadingTask = pdfjs.getDocument({ data: uint8Array })
+        
+        // Load PDF document with enhanced configuration
+        const loadingTask = pdfjsLib.getDocument({
+          data: uint8Array,
+          standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/',
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+          cMapPacked: true,
+        })
+        
         const pdfDocument = await loadingTask.promise
-        
         pageCount = pdfDocument.numPages
-        console.log(`PDF has ${pageCount} pages`)
+        console.log(`PDF loaded successfully with ${pageCount} pages`)
         
-        // Extract text from each page
+        // Extract text from each page with better processing
         const pageTexts = []
         for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
           try {
             const page = await pdfDocument.getPage(pageNum)
             const textContent = await page.getTextContent()
             
-            // Combine text items with proper spacing
-            const pageText = textContent.items
-              .map((item: any) => item.str)
-              .join(' ')
-              .replace(/\s+/g, ' ')
-              .trim()
+            // Process text items with better spacing and structure
+            const textItems = textContent.items.filter((item: any) => 
+              item.str && item.str.trim() && item.str.trim().length > 0
+            )
+            
+            // Group text items by approximate line position
+            const lines: { [key: string]: string[] } = {}
+            textItems.forEach((item: any) => {
+              const lineKey = Math.round(item.transform[5] / 5) * 5 // Group by Y position
+              if (!lines[lineKey]) lines[lineKey] = []
+              lines[lineKey].push(item.str)
+            })
+            
+            // Sort lines by Y position (top to bottom) and join text
+            const sortedLines = Object.keys(lines)
+              .sort((a, b) => parseFloat(b) - parseFloat(a)) // Descending Y (top to bottom)
+              .map(key => lines[key].join(' ').trim())
+              .filter(line => line.length > 0)
+            
+            const pageText = sortedLines.join('\n').trim()
             
             if (pageText) {
               pageTexts.push(pageText)
+              console.log(`Page ${pageNum}: extracted ${pageText.length} characters`)
             }
-            
-            console.log(`Extracted ${pageText.length} characters from page ${pageNum}`)
           } catch (pageError) {
             console.warn(`Error processing page ${pageNum}:`, pageError)
             // Continue with other pages
@@ -146,19 +163,18 @@ serve(async (req) => {
         console.log(`Total extracted text: ${extractedText.length} characters from ${pageCount} pages`)
 
         // Validate extraction quality
-        if (extractedText.length < 50) {
+        if (extractedText.length < 100) {
           console.warn('Low text extraction quality - document may be image-based or corrupted')
           summary = `PDF document "${document.original_name}" processed with limited text extraction. Document may contain primarily images or have extraction issues.`
         } else {
-          // Generate summary from first 200 words
+          // Create semantic chunks with enhanced processing
+          chunks = createEnhancedSemanticChunks(extractedText, documentId, pageCount)
+          console.log(`Created ${chunks.length} semantic chunks`)
+          
+          // Generate summary from first 300 words
           const words = extractedText.trim().split(/\s+/)
-          const firstWords = words.slice(0, 200).join(' ')
-          summary = `PDF document "${document.original_name}" (${pageCount} pages) successfully processed. Content preview: ${firstWords}${words.length > 200 ? '...' : ''}`
-        }
-
-        // Clean and validate text
-        if (!extractedText) {
-          throw new Error('No text content could be extracted from PDF')
+          const firstWords = words.slice(0, 300).join(' ')
+          summary = `PDF document "${document.original_name}" (${pageCount} pages) successfully processed. Content preview: ${firstWords}${words.length > 300 ? '...' : ''}`
         }
 
       } else {
@@ -173,11 +189,7 @@ serve(async (req) => {
       throw new Error(`Failed to extract text from document: ${extractionError.message}`)
     }
 
-    // Create semantic text chunks with better boundaries
-    const chunks = createSemanticChunks(extractedText, documentId, pageCount)
-    console.log(`Created ${chunks.length} semantic chunks`)
-
-    // Store chunks in database
+    // Store chunks in database if we have any
     if (chunks.length > 0) {
       const { error: chunksError } = await supabaseClient
         .from('document_chunks')
@@ -201,7 +213,8 @@ serve(async (req) => {
           page_count: pageCount,
           text_length: extractedText.length,
           chunk_count: chunks.length,
-          processing_timestamp: new Date().toISOString()
+          processing_timestamp: new Date().toISOString(),
+          extraction_quality: extractedText.length > 100 ? 'good' : 'limited'
         }
       })
       .eq('id', documentId)
@@ -254,31 +267,33 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: error.details
+        details: error.stack
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
 
-// Helper function to create semantic chunks with better boundaries
-function createSemanticChunks(text: string, documentId: string, pageCount: number) {
+// Enhanced semantic chunking function
+function createEnhancedSemanticChunks(text: string, documentId: string, pageCount: number) {
   const chunks = []
-  const targetChunkSize = 800 // Target words per chunk
-  const maxChunkSize = 1200 // Maximum words per chunk
+  const targetChunkSize = 1000 // Target words per chunk
+  const maxChunkSize = 1500   // Maximum words per chunk
+  const overlapSize = 150     // Words to overlap between chunks
   
-  // Split text into paragraphs first
+  // Split text into paragraphs and sentences
   const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0)
   
   let currentChunk = ''
   let currentWordCount = 0
   let chunkIndex = 0
+  let totalWordsProcessed = 0
   
   for (const paragraph of paragraphs) {
     const paragraphWords = paragraph.trim().split(/\s+/)
     const paragraphWordCount = paragraphWords.length
     
-    // If adding this paragraph would exceed max chunk size, create a new chunk
+    // If adding this paragraph would exceed max chunk size, finalize current chunk
     if (currentWordCount > 0 && (currentWordCount + paragraphWordCount) > maxChunkSize) {
       if (currentChunk.trim()) {
         chunks.push({
@@ -287,15 +302,19 @@ function createSemanticChunks(text: string, documentId: string, pageCount: numbe
           content: currentChunk.trim(),
           word_count: currentWordCount,
           metadata: {
-            start_word: Math.max(0, chunks.reduce((sum, c) => sum + c.word_count, 0)),
-            end_word: chunks.reduce((sum, c) => sum + c.word_count, 0) + currentWordCount,
+            start_word: totalWordsProcessed - currentWordCount,
+            end_word: totalWordsProcessed,
             chunk_type: 'semantic',
-            page_count: pageCount
+            page_count: pageCount,
+            overlap_with_next: overlapSize
           }
         })
       }
-      currentChunk = paragraph
-      currentWordCount = paragraphWordCount
+      
+      // Start new chunk with overlap from previous chunk
+      const overlapText = getLastNWords(currentChunk, overlapSize)
+      currentChunk = overlapText ? overlapText + '\n\n' + paragraph : paragraph
+      currentWordCount = (overlapText ? estimateWordCount(overlapText) : 0) + paragraphWordCount
     } else {
       // Add paragraph to current chunk
       if (currentChunk) {
@@ -306,7 +325,9 @@ function createSemanticChunks(text: string, documentId: string, pageCount: numbe
       currentWordCount += paragraphWordCount
     }
     
-    // If current chunk reaches target size, create chunk
+    totalWordsProcessed += paragraphWordCount
+    
+    // If current chunk reaches target size, finalize it
     if (currentWordCount >= targetChunkSize) {
       if (currentChunk.trim()) {
         chunks.push({
@@ -315,15 +336,19 @@ function createSemanticChunks(text: string, documentId: string, pageCount: numbe
           content: currentChunk.trim(),
           word_count: currentWordCount,
           metadata: {
-            start_word: Math.max(0, chunks.reduce((sum, c) => sum + c.word_count, 0)),
-            end_word: chunks.reduce((sum, c) => sum + c.word_count, 0) + currentWordCount,
+            start_word: totalWordsProcessed - currentWordCount,
+            end_word: totalWordsProcessed,
             chunk_type: 'semantic',
-            page_count: pageCount
+            page_count: pageCount,
+            overlap_with_next: overlapSize
           }
         })
       }
-      currentChunk = ''
-      currentWordCount = 0
+      
+      // Prepare overlap for next chunk
+      const overlapText = getLastNWords(currentChunk, overlapSize)
+      currentChunk = overlapText || ''
+      currentWordCount = overlapText ? estimateWordCount(overlapText) : 0
     }
   }
   
@@ -335,13 +360,26 @@ function createSemanticChunks(text: string, documentId: string, pageCount: numbe
       content: currentChunk.trim(),
       word_count: currentWordCount,
       metadata: {
-        start_word: Math.max(0, chunks.reduce((sum, c) => sum + c.word_count, 0)),
-        end_word: chunks.reduce((sum, c) => sum + c.word_count, 0) + currentWordCount,
+        start_word: totalWordsProcessed - currentWordCount,
+        end_word: totalWordsProcessed,
         chunk_type: 'semantic',
-        page_count: pageCount
+        page_count: pageCount,
+        is_final: true
       }
     })
   }
   
   return chunks
+}
+
+// Helper function to get last N words from text
+function getLastNWords(text: string, n: number): string {
+  if (!text) return ''
+  const words = text.trim().split(/\s+/)
+  return words.slice(-n).join(' ')
+}
+
+// Helper function to estimate word count
+function estimateWordCount(text: string): number {
+  return text.trim().split(/\s+/).length
 }

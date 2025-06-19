@@ -32,7 +32,25 @@ export interface ModelConfigData {
   pricing_source?: string;
   is_deprecated?: boolean;
   api_availability?: string;
+  primary_use_cases?: string[];
+  recommended_for?: string;
+  cost_tier?: 'Budget' | 'Moderate' | 'Premium';
+  performance_notes?: string;
+  context_window_tokens?: number;
+  supports_streaming?: boolean;
 }
+
+export type UseCaseCategory = 
+  | 'quick_tasks'
+  | 'deep_research'
+  | 'real_time_info'
+  | 'coding'
+  | 'reasoning'
+  | 'content_creation'
+  | 'vision_tasks'
+  | 'complex_problem_solving';
+
+export type CostTier = 'Budget' | 'Moderate' | 'Premium';
 
 export const useAdminModelMatrix = () => {
   const [matrixData, setMatrixData] = useState<UserModelMatrixData[]>([]);
@@ -128,7 +146,20 @@ export const useAdminModelMatrix = () => {
           setWarnings(prev => [...prev, `Model configuration failed to load: ${configError.message}`]);
           hasWarnings = true;
         } else {
-          setModelConfigs(configResult || []);
+          // Process model configs with usage guidance data
+          const processedConfigs = (configResult || []).map((config: any) => ({
+            ...config,
+            primary_use_cases: Array.isArray(config.primary_use_cases) 
+              ? config.primary_use_cases 
+              : config.primary_use_cases 
+                ? JSON.parse(config.primary_use_cases) 
+                : [],
+            cost_tier: config.cost_tier as CostTier,
+            context_window_tokens: config.context_window_tokens || 0,
+            supports_streaming: config.supports_streaming !== false
+          }));
+          
+          setModelConfigs(processedConfigs);
         }
       } else {
         console.error('Config fetch failed:', configResponse.reason);
@@ -186,12 +217,26 @@ export const useAdminModelMatrix = () => {
       is_globally_enabled: boolean;
       default_monthly_limit: number;
       cost_per_1k_tokens: number;
+      primary_use_cases: string[];
+      recommended_for: string;
+      cost_tier: CostTier;
+      performance_notes: string;
+      context_window_tokens: number;
+      supports_streaming: boolean;
     }>
   ) => {
     try {
+      // Convert primary_use_cases array to JSONB if provided
+      const dbUpdates = {
+        ...updates,
+        primary_use_cases: updates.primary_use_cases 
+          ? JSON.stringify(updates.primary_use_cases) 
+          : undefined
+      };
+
       const { error } = await supabase
         .from('model_configurations')
-        .update(updates)
+        .update(dbUpdates)
         .eq('provider', provider)
         .eq('model_name', modelName);
 

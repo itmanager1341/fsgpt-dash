@@ -878,7 +878,9 @@ export type Database = {
         Row: {
           api_availability: string | null
           capabilities: Json | null
+          context_window_tokens: number | null
           cost_per_1k_tokens: number
+          cost_tier: string | null
           created_at: string
           default_monthly_limit: number
           description: string | null
@@ -890,14 +892,20 @@ export type Database = {
           last_pricing_update: string | null
           max_tokens: number | null
           model_name: string
+          performance_notes: string | null
           pricing_source: string | null
+          primary_use_cases: Json | null
           provider: string
+          recommended_for: string | null
+          supports_streaming: boolean | null
           updated_at: string
         }
         Insert: {
           api_availability?: string | null
           capabilities?: Json | null
+          context_window_tokens?: number | null
           cost_per_1k_tokens?: number
+          cost_tier?: string | null
           created_at?: string
           default_monthly_limit?: number
           description?: string | null
@@ -909,14 +917,20 @@ export type Database = {
           last_pricing_update?: string | null
           max_tokens?: number | null
           model_name: string
+          performance_notes?: string | null
           pricing_source?: string | null
+          primary_use_cases?: Json | null
           provider: string
+          recommended_for?: string | null
+          supports_streaming?: boolean | null
           updated_at?: string
         }
         Update: {
           api_availability?: string | null
           capabilities?: Json | null
+          context_window_tokens?: number | null
           cost_per_1k_tokens?: number
+          cost_tier?: string | null
           created_at?: string
           default_monthly_limit?: number
           description?: string | null
@@ -928,8 +942,12 @@ export type Database = {
           last_pricing_update?: string | null
           max_tokens?: number | null
           model_name?: string
+          performance_notes?: string | null
           pricing_source?: string | null
+          primary_use_cases?: Json | null
           provider?: string
+          recommended_for?: string | null
+          supports_streaming?: boolean | null
           updated_at?: string
         }
         Relationships: []
@@ -1354,6 +1372,12 @@ export type Database = {
           pricing_source: string
           is_deprecated: boolean
           api_availability: string
+          primary_use_cases: Json
+          recommended_for: string
+          cost_tier: string
+          performance_notes: string
+          context_window_tokens: number
+          supports_streaming: boolean
         }[]
       }
       get_approval_stats: {

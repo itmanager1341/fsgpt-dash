@@ -47,53 +47,97 @@ export interface MonthlySummary {
 }
 
 export const useUsageAnalytics = (startDate?: string, endDate?: string) => {
-  const { data: dailyTrends, isLoading: trendsLoading } = useQuery({
+  const { data: dailyTrends, isLoading: trendsLoading, error: trendsError } = useQuery({
     queryKey: ['daily-usage-trends', startDate, endDate],
     queryFn: async () => {
+      console.log('Fetching daily usage trends...');
       const { data, error } = await supabase.rpc('get_daily_usage_trends', {
         start_date: startDate,
         end_date: endDate,
       });
-      if (error) throw error;
-      return data as DailyUsageTrend[];
+      if (error) {
+        console.error('Daily trends error:', error);
+        throw new Error(`Failed to fetch daily trends: ${error.message}`);
+      }
+      console.log('Daily trends fetched:', data?.length || 0, 'items');
+      return (data || []) as DailyUsageTrend[];
     },
+    retry: 3,
   });
 
-  const { data: modelUsage, isLoading: modelLoading } = useQuery({
+  const { data: modelUsage, isLoading: modelLoading, error: modelError } = useQuery({
     queryKey: ['model-usage-distribution'],
     queryFn: async () => {
+      console.log('Fetching model usage distribution...');
       const { data, error } = await supabase.rpc('get_model_usage_distribution');
-      if (error) throw error;
-      return data as ModelUsageDistribution[];
+      if (error) {
+        console.error('Model usage error:', error);
+        throw new Error(`Failed to fetch model usage: ${error.message}`);
+      }
+      console.log('Model usage fetched:', data?.length || 0, 'items');
+      return (data || []) as ModelUsageDistribution[];
     },
+    retry: 3,
   });
 
-  const { data: topUsers, isLoading: usersLoading } = useQuery({
+  const { data: topUsers, isLoading: usersLoading, error: usersError } = useQuery({
     queryKey: ['top-users-by-usage'],
     queryFn: async () => {
+      console.log('Fetching top users...');
       const { data, error } = await supabase.rpc('get_top_users_by_usage');
-      if (error) throw error;
-      return data as TopUser[];
+      if (error) {
+        console.error('Top users error:', error);
+        throw new Error(`Failed to fetch top users: ${error.message}`);
+      }
+      console.log('Top users fetched:', data?.length || 0, 'items');
+      return (data || []) as TopUser[];
     },
+    retry: 3,
   });
 
-  const { data: usageAlerts, isLoading: alertsLoading } = useQuery({
+  const { data: usageAlerts, isLoading: alertsLoading, error: alertsError } = useQuery({
     queryKey: ['usage-alerts'],
     queryFn: async () => {
+      console.log('Fetching usage alerts...');
       const { data, error } = await supabase.rpc('get_usage_alerts');
-      if (error) throw error;
-      return data as UsageAlert[];
+      if (error) {
+        console.error('Usage alerts error:', error);
+        throw new Error(`Failed to fetch usage alerts: ${error.message}`);
+      }
+      console.log('Usage alerts fetched:', data?.length || 0, 'items');
+      return (data || []) as UsageAlert[];
     },
+    retry: 3,
   });
 
-  const { data: monthlySummary, isLoading: summaryLoading } = useQuery({
+  const { data: monthlySummary, isLoading: summaryLoading, error: summaryError } = useQuery({
     queryKey: ['monthly-summary'],
     queryFn: async () => {
+      console.log('Fetching monthly summary...');
       const { data, error } = await supabase.rpc('get_monthly_summary');
-      if (error) throw error;
+      if (error) {
+        console.error('Monthly summary error:', error);
+        throw new Error(`Failed to fetch monthly summary: ${error.message}`);
+      }
+      if (!data || data.length === 0) {
+        console.warn('No monthly summary data returned');
+        return {
+          total_conversations: 0,
+          total_cost: 0,
+          average_per_user: 0,
+          active_users: 0,
+          new_users: 0,
+          top_model: 'N/A',
+          cost_growth_percentage: 0,
+        } as MonthlySummary;
+      }
+      console.log('Monthly summary fetched:', data[0]);
       return data[0] as MonthlySummary;
     },
+    retry: 3,
   });
+
+  const combinedError = trendsError || modelError || usersError || alertsError || summaryError;
 
   return {
     dailyTrends,
@@ -102,5 +146,7 @@ export const useUsageAnalytics = (startDate?: string, endDate?: string) => {
     usageAlerts,
     monthlySummary,
     isLoading: trendsLoading || modelLoading || usersLoading || alertsLoading || summaryLoading,
+    error: combinedError,
+    hasData: Boolean(dailyTrends || modelUsage || topUsers || usageAlerts || monthlySummary),
   };
 };

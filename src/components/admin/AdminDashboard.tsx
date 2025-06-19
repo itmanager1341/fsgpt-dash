@@ -1,20 +1,32 @@
 
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, MessageSquare, DollarSign, Activity, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Users, MessageSquare, DollarSign, Activity, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useAdminDashboard } from '@/hooks/useAdminDashboard';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const AdminDashboard: React.FC = () => {
-  const { stats, activities, isLoading, error } = useAdminDashboard();
+  const { stats, activities, isLoading, error, hasData } = useAdminDashboard();
 
   if (error) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-600">Failed to load dashboard data</p>
-          <p className="text-sm text-muted-foreground mt-2">Please try refreshing the page</p>
+        <div className="text-center space-y-4">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto" />
+          <div>
+            <p className="text-red-600 font-medium">Failed to load dashboard data</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {error.message || 'Please check your connection and try refreshing the page'}
+            </p>
+            <details className="mt-4 text-left">
+              <summary className="cursor-pointer text-sm text-blue-600 hover:text-blue-800">
+                Technical Details
+              </summary>
+              <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto">
+                {JSON.stringify(error, null, 2)}
+              </pre>
+            </details>
+          </div>
         </div>
       </div>
     );
@@ -70,6 +82,23 @@ const AdminDashboard: React.FC = () => {
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hour${Math.floor(diffInMinutes / 60) > 1 ? 's' : ''} ago`;
     return date.toLocaleDateString();
   };
+
+  // Show a different message if we have no data vs if we're loading
+  if (!isLoading && !hasData) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center space-y-4">
+          <Activity className="h-12 w-12 text-blue-500 mx-auto" />
+          <div>
+            <p className="text-gray-600 font-medium">No data available yet</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Start using the application to see dashboard statistics
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -463,42 +463,95 @@ export type Database = {
           },
         ]
       }
+      document_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string | null
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          word_count: number
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          word_count?: number
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          word_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "document_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_uploads: {
         Row: {
           conversation_id: string | null
+          extracted_text: string | null
           file_name: string
           file_size: number
           file_type: string
           id: string
           metadata: Json | null
           original_name: string
+          processing_error: string | null
+          processing_status: string | null
           storage_path: string
+          summary: string | null
           upload_status: string
           uploaded_at: string
           user_id: string
         }
         Insert: {
           conversation_id?: string | null
+          extracted_text?: string | null
           file_name: string
           file_size: number
           file_type: string
           id?: string
           metadata?: Json | null
           original_name: string
+          processing_error?: string | null
+          processing_status?: string | null
           storage_path: string
+          summary?: string | null
           upload_status?: string
           uploaded_at?: string
           user_id: string
         }
         Update: {
           conversation_id?: string | null
+          extracted_text?: string | null
           file_name?: string
           file_size?: number
           file_type?: string
           id?: string
           metadata?: Json | null
           original_name?: string
+          processing_error?: string | null
+          processing_status?: string | null
           storage_path?: string
+          summary?: string | null
           upload_status?: string
           uploaded_at?: string
           user_id?: string

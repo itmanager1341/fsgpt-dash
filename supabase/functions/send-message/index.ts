@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -93,6 +92,63 @@ serve(async (req) => {
 
     console.log(`Processing message for conversation ${conversationId} with ${provider}:${model}`)
 
+    // Check if message references documents
+    const documentReferences = message.match(/\[Documents available for analysis:(.*?)\]/s);
+    let documentContext = '';
+    
+    if (documentReferences) {
+      console.log('Document references found, fetching document content...');
+      
+      // Extract document information from the message
+      const docInfo = documentReferences[1];
+      
+      // Get documents associated with this conversation or user
+      const { data: documents, error: docError } = await supabaseClient
+        .from('document_uploads')
+        .select(`
+          id,
+          original_name,
+          summary,
+          extracted_text,
+          document_chunks (
+            content,
+            chunk_index,
+            word_count
+          )
+        `)
+        .eq('user_id', user.user.id)
+        .eq('processing_status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(5); // Limit to recent documents
+
+      if (!docError && documents && documents.length > 0) {
+        console.log(`Found ${documents.length} processed documents`);
+        
+        // Build document context for the AI
+        documentContext = '\n\n--- DOCUMENT CONTEXT ---\n';
+        documents.forEach(doc => {
+          documentContext += `\nDocument: ${doc.original_name}\n`;
+          if (doc.summary) {
+            documentContext += `Summary: ${doc.summary}\n`;
+          }
+          
+          // Include first few chunks for context
+          if (doc.document_chunks && doc.document_chunks.length > 0) {
+            const contextChunks = doc.document_chunks
+              .sort((a, b) => a.chunk_index - b.chunk_index)
+              .slice(0, 3); // First 3 chunks
+            
+            contextChunks.forEach(chunk => {
+              documentContext += `Content excerpt: ${chunk.content.substring(0, 500)}...\n`;
+            });
+          } else if (doc.extracted_text) {
+            documentContext += `Content excerpt: ${doc.extracted_text.substring(0, 1000)}...\n`;
+          }
+        });
+        documentContext += '--- END DOCUMENT CONTEXT ---\n\n';
+      }
+    }
+
     // Store user message with user_id
     const { data: userMessage, error: userMessageError } = await supabaseClient
       .from('messages')
@@ -143,10 +199,19 @@ serve(async (req) => {
       content: msg.content
     }))
 
-    // Add current message
-    contextMessages.push({ role: 'user', content: message })
+    // Add system message for document analysis if we have document context
+    if (documentContext) {
+      contextMessages.unshift({
+        role: 'system',
+        content: `You are an AI assistant that can analyze documents. When users ask questions about uploaded documents, use the provided document context to give accurate, specific answers. Always cite which document you're referencing when possible.${documentContext}`
+      });
+    }
 
-    console.log(`Calling ${provider} API with ${contextMessages.length} messages`)
+    // Add current message (clean it of document metadata for the AI)
+    const cleanMessage = message.replace(/\[Documents available for analysis:.*?\]/s, '').trim();
+    contextMessages.push({ role: 'user', content: cleanMessage });
+
+    console.log(`Calling ${provider} API with ${contextMessages.length} messages`);
 
     // Call LLM API
     const llmResponse = await fetch(apiUrl, {

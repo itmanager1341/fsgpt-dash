@@ -2,9 +2,10 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Paperclip, X } from 'lucide-react';
+import { Send, Paperclip, X, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChatInputAreaProps {
   onSendMessage: (content: string, provider?: string, model?: string) => void;
@@ -15,6 +16,10 @@ interface ChatInputAreaProps {
 interface AttachedFile {
   file: File;
   preview?: string;
+  documentId?: string;
+  processing?: boolean;
+  processed?: boolean;
+  summary?: string;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -31,10 +36,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     if ((message.trim() || attachedFiles.length > 0) && !disabled) {
       let finalMessage = message.trim();
       
-      // If files are attached, add file information to the message
-      if (attachedFiles.length > 0) {
-        const fileList = attachedFiles.map(af => af.file.name).join(', ');
-        finalMessage += `\n\n[Attached files: ${fileList}]`;
+      // Include processed document information
+      const processedDocs = attachedFiles.filter(af => af.processed && af.summary);
+      if (processedDocs.length > 0) {
+        const docInfo = processedDocs.map(doc => 
+          `Document: ${doc.file.name} - ${doc.summary}`
+        ).join('\n');
+        finalMessage += `\n\n[Documents available for analysis:\n${docInfo}]`;
       }
       
       onSendMessage(finalMessage);
@@ -60,24 +68,132 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadToStorage = async (file: File, userId: string): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(fileName, file);
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    return fileName;
+  };
+
+  const processDocument = async (file: File, storagePath: string): Promise<AttachedFile> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No session found');
+      }
+
+      // Create document record
+      const { data: document, error: docError } = await supabase
+        .from('document_uploads')
+        .insert({
+          user_id: session.user.id,
+          file_name: `doc_${Date.now()}`,
+          original_name: file.name,
+          storage_path: storagePath,
+          file_size: file.size,
+          file_type: file.type,
+          upload_status: 'completed'
+        })
+        .select()
+        .single();
+
+      if (docError || !document) {
+        throw new Error('Failed to create document record');
+      }
+
+      // Process the document
+      const { data: processResult, error: processError } = await supabase.functions.invoke('process-document', {
+        body: { documentId: document.id },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (processError) {
+        throw processError;
+      }
+
+      return {
+        file,
+        documentId: document.id,
+        processing: false,
+        processed: true,
+        summary: processResult.summary,
+        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+      };
+    } catch (error) {
+      console.error('Document processing error:', error);
+      throw error;
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     
-    // Validate file types and sizes
+    // Validate files
     const validFiles = files.filter(file => {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      if (file.size > 10 * 1024 * 1024) {
         toast.error(`File ${file.name} is too large. Maximum size is 10MB.`);
+        return false;
+      }
+      if (file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
+        toast.error(`File ${file.name} is not supported. Only PDF and image files are allowed.`);
         return false;
       }
       return true;
     });
 
+    // Add files with processing state
     const newAttachedFiles: AttachedFile[] = validFiles.map(file => ({
       file,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+      processing: file.type === 'application/pdf',
+      processed: file.type.startsWith('image/'), // Images don't need processing
     }));
 
     setAttachedFiles(prev => [...prev, ...newAttachedFiles]);
+
+    // Process PDF files
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      if (file.type === 'application/pdf') {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('Authentication required');
+          }
+
+          // Upload to storage
+          const storagePath = await uploadToStorage(file, session.user.id);
+          
+          // Process document
+          const processedFile = await processDocument(file, storagePath);
+          
+          // Update the file in state
+          setAttachedFiles(prev => prev.map(af => 
+            af.file === file ? processedFile : af
+          ));
+
+          toast.success(`Document ${file.name} processed successfully`);
+        } catch (error) {
+          console.error('Error processing document:', error);
+          toast.error(`Failed to process ${file.name}: ${error.message}`);
+          
+          // Update file to show error state
+          setAttachedFiles(prev => prev.map(af => 
+            af.file === file ? { ...af, processing: false, processed: false } : af
+          ));
+        }
+      }
+    }
     
     // Clear the input
     if (fileInputRef.current) {
@@ -103,15 +219,34 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       {attachedFiles.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2">
           {attachedFiles.map((attachedFile, index) => (
-            <div key={index} className="relative bg-muted rounded-lg p-2 flex items-center gap-2">
-              {attachedFile.preview && (
-                <img 
-                  src={attachedFile.preview} 
-                  alt={attachedFile.file.name}
-                  className="w-8 h-8 object-cover rounded"
-                />
-              )}
-              <span className="text-sm truncate max-w-32">{attachedFile.file.name}</span>
+            <div key={index} className="relative bg-muted rounded-lg p-2 flex items-center gap-2 max-w-64">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {attachedFile.processing ? (
+                  <Loader2 size={16} className="animate-spin text-blue-500" />
+                ) : attachedFile.file.type === 'application/pdf' ? (
+                  <FileText size={16} className={attachedFile.processed ? 'text-green-500' : 'text-gray-500'} />
+                ) : attachedFile.preview ? (
+                  <img 
+                    src={attachedFile.preview} 
+                    alt={attachedFile.file.name}
+                    className="w-4 h-4 object-cover rounded"
+                  />
+                ) : (
+                  <FileText size={16} className="text-gray-500" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm truncate block">{attachedFile.file.name}</span>
+                  {attachedFile.processing && (
+                    <span className="text-xs text-blue-600">Processing...</span>
+                  )}
+                  {attachedFile.processed && attachedFile.summary && (
+                    <span className="text-xs text-green-600">Ready for analysis</span>
+                  )}
+                  {!attachedFile.processing && !attachedFile.processed && attachedFile.file.type === 'application/pdf' && (
+                    <span className="text-xs text-red-600">Processing failed</span>
+                  )}
+                </div>
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
@@ -144,7 +279,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           multiple
           className="hidden"
           onChange={handleFileChange}
-          accept="image/*,.pdf,.doc,.docx,.txt,.md"
+          accept="application/pdf,image/*"
         />
 
         {/* Message Input */}

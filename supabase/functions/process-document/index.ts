@@ -12,12 +12,6 @@ interface ProcessDocumentRequest {
   conversationId?: string;
 }
 
-// Import PDF.js for Deno environment
-const { getDocument, GlobalWorkerOptions } = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/+esm');
-
-// Set up PDF.js worker
-GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -107,9 +101,17 @@ serve(async (req) => {
       if (document.file_type === 'application/pdf') {
         console.log('Processing PDF document with PDF.js...')
         
+        // Import PDF.js dynamically inside the handler
+        const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/+esm')
+        
+        // Set up PDF.js worker safely
+        if (pdfjs.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+        }
+        
         // Process PDF using PDF.js
         const uint8Array = new Uint8Array(arrayBuffer)
-        const loadingTask = getDocument({ data: uint8Array })
+        const loadingTask = pdfjs.getDocument({ data: uint8Array })
         const pdfDocument = await loadingTask.promise
         
         pageCount = pdfDocument.numPages

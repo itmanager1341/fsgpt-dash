@@ -1409,6 +1409,26 @@ export type Database = {
         Args: { service_name: string }
         Returns: string
       }
+      get_admin_dashboard_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_users: number
+          active_today: number
+          active_this_week: number
+          active_this_month: number
+          total_conversations: number
+          conversations_today: number
+          conversations_this_week: number
+          conversations_this_month: number
+          total_cost: number
+          cost_today: number
+          cost_this_week: number
+          cost_this_month: number
+          avg_response_time: number
+          error_rate: number
+          active_connections: number
+        }[]
+      }
       get_admin_model_overview: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1467,6 +1487,15 @@ export type Database = {
           next_run: string
         }[]
       }
+      get_daily_usage_trends: {
+        Args: { start_date?: string; end_date?: string }
+        Returns: {
+          date: string
+          conversations: number
+          cost: number
+          users: number
+        }[]
+      }
       get_job_execution_logs: {
         Args: {
           p_job_name?: string
@@ -1501,6 +1530,62 @@ export type Database = {
           parameters: Json
           schedule: string
           updated_at: string
+        }[]
+      }
+      get_model_usage_distribution: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          provider: string
+          model_name: string
+          usage_count: number
+          total_cost: number
+          usage_percentage: number
+        }[]
+      }
+      get_monthly_summary: {
+        Args: { target_year?: number; target_month?: number }
+        Returns: {
+          total_conversations: number
+          total_cost: number
+          average_per_user: number
+          active_users: number
+          new_users: number
+          top_model: string
+          cost_growth_percentage: number
+        }[]
+      }
+      get_recent_admin_activities: {
+        Args: { limit_count?: number }
+        Returns: {
+          id: string
+          activity_type: string
+          message: string
+          user_email: string
+          metadata: Json
+          created_at: string
+        }[]
+      }
+      get_top_users_by_usage: {
+        Args: { period_days?: number; limit_count?: number }
+        Returns: {
+          user_id: string
+          user_email: string
+          user_name: string
+          total_cost: number
+          conversation_count: number
+          usage_percentage: number
+        }[]
+      }
+      get_usage_alerts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          user_id: string
+          user_email: string
+          user_name: string
+          current_usage: number
+          monthly_limit: number
+          usage_percentage: number
+          alert_level: string
         }[]
       }
       get_user_model_access: {

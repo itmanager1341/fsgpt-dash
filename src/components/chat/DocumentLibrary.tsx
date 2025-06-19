@@ -13,7 +13,7 @@ interface Document {
   file_size: number;
   processing_status: string;
   summary?: string;
-  created_at: string;
+  uploaded_at: string;
   upload_status: string;
 }
 
@@ -25,8 +25,8 @@ const DocumentLibrary: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('document_uploads')
-        .select('id, original_name, file_size, processing_status, summary, created_at, upload_status')
-        .order('created_at', { ascending: false });
+        .select('id, original_name, file_size, processing_status, summary, uploaded_at, upload_status')
+        .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
       setDocuments(data || []);
@@ -123,7 +123,7 @@ const DocumentLibrary: React.FC = () => {
                         {document.original_name}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatFileSize(document.file_size)} • {new Date(document.created_at).toLocaleDateString()}
+                        {formatFileSize(document.file_size)} • {new Date(document.uploaded_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>

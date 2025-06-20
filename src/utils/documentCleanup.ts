@@ -11,10 +11,10 @@ export const cleanupStuckDocuments = async () => {
     
     const { data: stuckDocs, error: findError } = await supabase
       .from('document_uploads')
-      .select('id, original_name, processing_status, created_at')
+      .select('id, original_name, processing_status, uploaded_at')
       .eq('user_id', user.id)
       .in('processing_status', ['processing', 'pending'])
-      .lt('created_at', tenMinutesAgo);
+      .lt('uploaded_at', tenMinutesAgo);
 
     if (findError) {
       console.error('Error finding stuck documents:', findError);
@@ -54,7 +54,7 @@ export const getDocumentProcessingStats = async () => {
 
     const { data: stats, error } = await supabase
       .from('document_uploads')
-      .select('processing_status, file_size, created_at')
+      .select('processing_status, file_size, uploaded_at')
       .eq('user_id', user.id);
 
     if (error) {
@@ -74,7 +74,7 @@ export const getDocumentProcessingStats = async () => {
       statusCounts,
       totalSizeMB: Math.round(totalSize / (1024 * 1024)),
       recentCount: stats?.filter(doc => {
-        const docDate = new Date(doc.created_at);
+        const docDate = new Date(doc.uploaded_at);
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         return docDate > oneDayAgo;
       }).length || 0

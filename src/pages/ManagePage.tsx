@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { AnimatedTransition } from '@/components/AnimatedTransition';
 import { useAnimateIn } from '@/lib/animations';
-import CortexTable from '@/components/manage/CortexTable';
-import CortexSidebar from '@/components/manage/CortexSidebar';
+import FSGKnowledgeTable from '@/components/manage/FSGKnowledgeTable';
+import FSGKnowledgeSidebar from '@/components/manage/FSGKnowledgeSidebar';
 import ViewSwitcher from '@/components/manage/ViewSwitcher';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Check, Edit2, X } from 'lucide-react';
+import { Check, Edit2, X, BookOpen } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Toaster } from 'sonner';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -15,12 +16,12 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 const ManagePage = () => {
   const showContent = useAnimateIn(false, 300);
   const [viewType, setViewType] = useState<'table' | 'grid' | 'list' | 'kanban'>('table');
-  const [libraryTitle, setLibraryTitle] = useState('Cortex Library');
+  const [libraryTitle, setLibraryTitle] = useState('FSG Knowledge Hub');
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('private');
-  const [selectedItem, setSelectedItem] = useState<string | null>('overview');
+  const [selectedCategory, setSelectedCategory] = useState('personal_collection');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>('overview');
 
   const handleEditClick = () => {
     setTempTitle(libraryTitle);
@@ -50,9 +51,9 @@ const ManagePage = () => {
     }
   };
 
-  const handleCortexSelect = (categoryId: string, itemId: string | null) => {
+  const handleKnowledgeSelect = (categoryId: string, subcategoryId: string | null) => {
     setSelectedCategory(categoryId);
-    setSelectedItem(itemId);
+    setSelectedSubcategory(subcategoryId);
   };
 
   // Handle keyboard events for inline editing
@@ -70,13 +71,13 @@ const ManagePage = () => {
         <Toaster position="top-right" />
         <AnimatedTransition show={showContent} animation="slide-up">
           <div className="flex h-[calc(100vh-130px)]">
-            <CortexSidebar 
-              onCortexSelect={handleCortexSelect}
+            <FSGKnowledgeSidebar 
+              onCategorySelect={handleKnowledgeSelect}
               selectedCategoryId={selectedCategory}
-              selectedItemId={selectedItem}
+              selectedSubcategoryId={selectedSubcategory}
             />
             <div className="flex-1 overflow-x-auto">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 {isEditing ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -94,7 +95,8 @@ const ManagePage = () => {
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    <BookOpen size={20} className="text-primary" />
                     <h2 className="text-xl font-semibold">{libraryTitle}</h2>
                     <Button
                       size="icon"
@@ -110,10 +112,9 @@ const ManagePage = () => {
                   <ViewSwitcher activeView={viewType} onViewChange={setViewType} />
                 </TooltipProvider>
               </div>
-              <CortexTable 
-                viewType={viewType} 
+              <FSGKnowledgeTable 
                 categoryId={selectedCategory}
-                cortexId={selectedItem}
+                subcategoryId={selectedSubcategory}
               />
             </div>
           </div>
@@ -123,14 +124,14 @@ const ManagePage = () => {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Edit Library Title</DialogTitle>
+              <DialogTitle>Edit Knowledge Hub Title</DialogTitle>
             </DialogHeader>
             <div className="py-4">
               <Input
                 value={tempTitle}
                 onChange={(e) => setTempTitle(e.target.value)}
                 className="w-full"
-                placeholder="Enter a title for your library"
+                placeholder="Enter a title for your knowledge hub"
                 autoFocus
               />
             </div>

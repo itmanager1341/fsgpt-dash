@@ -774,6 +774,160 @@ export type Database = {
         }
         Relationships: []
       }
+      knowledge_categories: {
+        Row: {
+          access_level: string
+          created_at: string
+          department_restricted: string[] | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          parent_category: string | null
+        }
+        Insert: {
+          access_level?: string
+          created_at?: string
+          department_restricted?: string[] | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          parent_category?: string | null
+        }
+        Update: {
+          access_level?: string
+          created_at?: string
+          department_restricted?: string[] | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          parent_category?: string | null
+        }
+        Relationships: []
+      }
+      knowledge_items: {
+        Row: {
+          ai_keywords: Json | null
+          ai_summary: string | null
+          category: string
+          classification_level: string
+          client_reference: string | null
+          content_type: string
+          created_at: string
+          department: string | null
+          description: string | null
+          document_upload_id: string | null
+          file_path: string | null
+          id: string
+          last_accessed_at: string | null
+          metadata: Json | null
+          processing_status: string | null
+          project_code: string | null
+          subcategory: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string
+          user_id: string
+          view_count: number | null
+        }
+        Insert: {
+          ai_keywords?: Json | null
+          ai_summary?: string | null
+          category: string
+          classification_level?: string
+          client_reference?: string | null
+          content_type: string
+          created_at?: string
+          department?: string | null
+          description?: string | null
+          document_upload_id?: string | null
+          file_path?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          processing_status?: string | null
+          project_code?: string | null
+          subcategory?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          user_id: string
+          view_count?: number | null
+        }
+        Update: {
+          ai_keywords?: Json | null
+          ai_summary?: string | null
+          category?: string
+          classification_level?: string
+          client_reference?: string | null
+          content_type?: string
+          created_at?: string
+          department?: string | null
+          description?: string | null
+          document_upload_id?: string | null
+          file_path?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          processing_status?: string | null
+          project_code?: string | null
+          subcategory?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_items_document_upload_id_fkey"
+            columns: ["document_upload_id"]
+            isOneToOne: false
+            referencedRelation: "document_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_shares: {
+        Row: {
+          created_at: string
+          id: string
+          knowledge_item_id: string | null
+          permission_level: string
+          shared_by: string
+          shared_with: string | null
+          shared_with_department: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          knowledge_item_id?: string | null
+          permission_level?: string
+          shared_by: string
+          shared_with?: string | null
+          shared_with_department?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          knowledge_item_id?: string | null
+          permission_level?: string
+          shared_by?: string
+          shared_with?: string | null
+          shared_with_department?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_shares_knowledge_item_id_fkey"
+            columns: ["knowledge_item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       llm_prompts: {
         Row: {
           created_at: string | null
@@ -1160,6 +1314,7 @@ export type Database = {
           approved_by: string | null
           avatar_url: string | null
           created_at: string
+          department: string | null
           email: string
           first_name: string | null
           id: string
@@ -1173,6 +1328,7 @@ export type Database = {
           approved_by?: string | null
           avatar_url?: string | null
           created_at?: string
+          department?: string | null
           email: string
           first_name?: string | null
           id: string
@@ -1186,6 +1342,7 @@ export type Database = {
           approved_by?: string | null
           avatar_url?: string | null
           created_at?: string
+          department?: string | null
           email?: string
           first_name?: string | null
           id?: string

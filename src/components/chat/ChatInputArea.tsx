@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -77,9 +76,26 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     fileInputRef.current?.click();
   };
 
-  const uploadToStorage = async (file: File, userId: string): Promise<string> => {
+  // Enhanced storage naming function
+  const generateFriendlyStoragePath = (file: File, userId: string, documentId: string): string => {
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Sanitize filename - remove special chars, keep alphanumeric, dots, hyphens, underscores
+    const sanitizedName = file.name
+      .replace(/[^a-zA-Z0-9.\-_]/g, '_')
+      .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+      .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+    
     const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const nameWithoutExt = sanitizedName.replace(`.${fileExt}`, '');
+    
+    // Format: YYYY-MM-DD_filename_docId.ext
+    return `${userId}/${dateStr}_${nameWithoutExt}_${documentId.substring(0, 8)}.${fileExt}`;
+  };
+
+  const uploadToStorage = async (file: File, userId: string, documentId: string): Promise<string> => {
+    const fileName = generateFriendlyStoragePath(file, userId, documentId);
     
     const { error: uploadError } = await supabase.storage
       .from('documents')
@@ -92,35 +108,20 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     return fileName;
   };
 
-  const processDocument = async (file: File, storagePath: string): Promise<AttachedFile> => {
+  const processDocument = async (file: File, documentId: string): Promise<AttachedFile> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('No session found');
       }
 
-      // Create document record
-      const { data: document, error: docError } = await supabase
-        .from('document_uploads')
-        .insert({
-          user_id: session.user.id,
-          file_name: `doc_${Date.now()}`,
-          original_name: file.name,
-          storage_path: storagePath,
-          file_size: file.size,
-          file_type: file.type,
-          upload_status: 'completed'
-        })
-        .select()
-        .single();
-
-      if (docError || !document) {
-        throw new Error('Failed to create document record');
-      }
+      // Upload to storage with friendly naming
+      const storagePath = await uploadToStorage(file, session.user.id, documentId);
+      console.log(`File uploaded with friendly name: ${storagePath}`);
 
       // Process the document with Azure
       const { data: processResult, error: processError } = await supabase.functions.invoke('process-document', {
-        body: { documentId: document.id },
+        body: { documentId },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -130,9 +131,23 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         throw processError;
       }
 
+      // Validate processing quality
+      const isQualityGood = processResult.textLength > 100 && 
+                           processResult.chunksCreated > 0 && 
+                           (processResult.pageCount ? processResult.chunksCreated >= processResult.pageCount : true);
+
+      if (!isQualityGood) {
+        console.warn(`Document processing quality warning:`, {
+          textLength: processResult.textLength,
+          chunksCreated: processResult.chunksCreated,
+          pageCount: processResult.pageCount
+        });
+        toast.error(`Document ${file.name} may have incomplete processing. Text: ${processResult.textLength} chars, Chunks: ${processResult.chunksCreated}`);
+      }
+
       return {
         file,
-        documentId: document.id,
+        documentId,
         processing: false,
         processed: true,
         summary: processResult.summary,
@@ -183,11 +198,44 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             throw new Error('Authentication required');
           }
 
-          // Upload to storage
-          const storagePath = await uploadToStorage(file, session.user.id);
+          // Create document record first to get ID for storage naming
+          const { data: document, error: docError } = await supabase
+            .from('document_uploads')
+            .insert({
+              user_id: session.user.id,
+              file_name: `doc_${Date.now()}`,
+              original_name: file.name,
+              storage_path: 'temp', // Will be updated after upload
+              file_size: file.size,
+              file_type: file.type,
+              upload_status: 'completed'
+            })
+            .select()
+            .single();
+
+          if (docError || !document) {
+            throw new Error('Failed to create document record');
+          }
+
+          // Generate friendly storage path and upload
+          const storagePath = generateFriendlyStoragePath(file, session.user.id, document.id);
+          
+          const { error: uploadError } = await supabase.storage
+            .from('documents')
+            .upload(storagePath, file);
+
+          if (uploadError) {
+            throw uploadError;
+          }
+
+          // Update document record with correct storage path
+          await supabase
+            .from('document_uploads')
+            .update({ storage_path: storagePath })
+            .eq('id', document.id);
           
           // Process document with Azure
-          const processedFile = await processDocument(file, storagePath);
+          const processedFile = await processDocument(file, document.id);
           
           // Update the file in state
           setAttachedFiles(prev => prev.map(af => 

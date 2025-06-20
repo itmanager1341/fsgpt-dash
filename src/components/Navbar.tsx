@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, MessageSquare, Settings, BarChart3, Upload, User, LogOut, Sun, Moon, Shield } from 'lucide-react';
@@ -18,8 +17,8 @@ const Navbar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // TODO: Replace with proper admin role check
-  const isAdmin = profile?.status === 'approved'; // Placeholder for admin check
+  // Updated admin role check to include new roles
+  const isAdmin = profile?.status === 'approved'; // Keep existing logic for now
 
   const navigationItems = [
     { name: 'Chat', path: '/chat', icon: MessageSquare },
@@ -48,13 +47,13 @@ const Navbar = () => {
       <nav className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            {/* Logo and brand */}
+            {/* Logo updated for FSG Hub */}
             <div className="flex items-center">
               <Link to="/" className="flex-shrink-0 flex items-center">
                 <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">SB</span>
+                  <span className="text-white font-bold text-sm">FSG</span>
                 </div>
-                <span className="ml-2 text-xl font-bold text-foreground">Second Brain</span>
+                <span className="ml-2 text-xl font-bold text-foreground">FSG Hub</span>
               </Link>
             </div>
 

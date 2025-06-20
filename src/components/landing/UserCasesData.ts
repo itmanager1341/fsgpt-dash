@@ -2,90 +2,64 @@
 import { UserCasesData, Book } from './UseCasesTypes';
 
 export const userCasesData: UserCasesData = {
-  Marketers: {
-    title: 'Save and find quotes & highlights',
-    subtitle: 'that inspire you.',
-    description: "nature scene now feels like a stimulation. We are overloaded with digital imagery. The internet has delivered the world to us on a silver platter from the glacial landscapes of Greenland to the cracks lining the Sahara desert. We've seen the deep ocean, microscopic bacteria, the insides of our own bodies.",
-    quote: "True change is within.",
-    background: 'bg-[#ff4d3c]',
+  Staff: {
+    title: 'Process documents and',
+    subtitle: 'create content efficiently.',
+    description: "Upload client briefs, research documents, and reference materials. Use AI to extract key insights, generate summaries, and create first drafts of proposals, emails, and presentations. Organize everything in project folders for easy access.",
+    quote: "AI-powered productivity for daily tasks.",
+    background: 'bg-[#0ea5e9]',
     textColor: 'text-white',
-    ctaText: 'SAVE TO MY MIND'
+    ctaText: 'START PROCESSING'
   },
-  Designers: {
-    title: 'Create instant, boundless',
-    subtitle: 'visual moodboards.',
-    description: '',
-    quote: '',
-    background: 'bg-[#d8ede7]',
+  Leadership: {
+    title: 'Strategic analysis and',
+    subtitle: 'executive decision support.',
+    description: "Get comprehensive analysis of market research, competitive intelligence, and business documents. Generate executive summaries, board presentation materials, and strategic recommendations based on multiple data sources.",
+    quote: "Data-driven insights for leadership.",
+    background: 'bg-[#8b5cf6]',
     textColor: 'text-white',
-    ctaText: '',
-    showImageGrid: true
+    ctaText: 'ANALYZE NOW'
   },
-  Writers: {
-    title: 'Write without',
-    subtitle: 'distractions.',
-    description: '',
-    quote: '',
-    background: 'bg-[#f7c2d2]',
+  Admin: {
+    title: 'System oversight and',
+    subtitle: 'usage analytics.',
+    description: "Monitor system usage, manage user access, track costs across AI models, and maintain security compliance. Access comprehensive dashboards showing team productivity and system performance metrics.",
+    quote: "Complete control and visibility.",
+    background: 'bg-[#059669]',
     textColor: 'text-white',
-    ctaText: 'ADD NEW NOTE',
-    showNotepad: true
-  },
-  Researchers: {
-    title: 'Collect all your research &',
-    subtitle: 'references in one place.',
-    description: '',
-    quote: '',
-    background: 'bg-[#e8f4f8]',
-    textColor: 'text-white',
-    ctaText: '',
-    showBrain: true
-  },
-  Developers: {
-    title: 'Your private',
-    subtitle: 'resource & reference hub.',
-    description: '',
-    quote: '',
-    background: 'bg-[#1a1f2c]',
-    textColor: 'text-white',
-    ctaText: '',
-    showDevTools: true
-  },
-  Everyone: {
-    title: 'A place for everything',
-    subtitle: 'you want to remember.',
-    description: '',
-    quote: '',
-    background: 'bg-[#e8ecf0]',
-    textColor: 'text-white',
-    ctaText: '',
-    showTags: true
+    ctaText: 'VIEW DASHBOARD'
   }
 };
 
-export const booksData: Book[] = [{
-  title: "The Creative Mind",
-  author: "Maria Johnson",
-  coverColor: "bg-[#f97316]",
-  textColor: "text-white"
-}, {
-  title: "Design Patterns",
-  author: "Alex Thompson",
-  coverColor: "bg-[#8b5cf6]",
-  textColor: "text-white"
-}, {
-  title: "The Art of Focus",
-  author: "Sarah Williams",
-  coverColor: "bg-[#0ea5e9]",
-  textColor: "text-white"
-}, {
-  title: "Digital Minimalism",
-  author: "Cal Newport",
-  coverColor: "bg-[#d946ef]",
-  textColor: "text-white"
-}, {
-  title: "Atomic Habits",
-  author: "James Clear",
-  coverColor: "bg-[#f97316]",
-  textColor: "text-white"
-}];
+export const booksData: Book[] = [
+  {
+    title: "FSG Brand Guide",
+    author: "Creative Team",
+    coverColor: "bg-[#f97316]",
+    textColor: "text-white"
+  },
+  {
+    title: "Client Protocols",
+    author: "Account Management",
+    coverColor: "bg-[#8b5cf6]",
+    textColor: "text-white"
+  },
+  {
+    title: "Strategy Framework",
+    author: "Leadership",
+    coverColor: "bg-[#0ea5e9]",
+    textColor: "text-white"
+  },
+  {
+    title: "Process Manual",
+    author: "Operations",
+    coverColor: "bg-[#d946ef]",
+    textColor: "text-white"
+  },
+  {
+    title: "Industry Reports",
+    author: "Research Team",
+    coverColor: "bg-[#059669]",
+    textColor: "text-white"
+  }
+];

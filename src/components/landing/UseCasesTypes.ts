@@ -1,5 +1,5 @@
 
-export type UserType = 'Marketers' | 'Designers' | 'Writers' | 'Researchers' | 'Developers' | 'Everyone';
+export type UserType = 'Staff' | 'Leadership' | 'Admin';
 
 export interface Book {
   title: string;

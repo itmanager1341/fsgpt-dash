@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Search, Filter, Plus, Move, FileText, Presentation, Mic, Template, FileCheck, BarChart } from 'lucide-react';
+import { Search, Filter, Plus, Move, FileText, Presentation, Mic, FileCheck, BarChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -54,7 +53,7 @@ const FSGKnowledgeTable = ({
       'document': FileText,
       'presentation': Presentation,
       'recording': Mic,
-      'template': Template,
+      'template': FileCheck,
       'guideline': FileCheck,
       'report': BarChart,
     };

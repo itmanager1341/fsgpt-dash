@@ -23,6 +23,7 @@ interface AttachedFile {
   processingError?: string;
   textLength?: number;
   pageCount?: number;
+  processor?: string;
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -46,6 +47,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           let docDesc = `Document: ${doc.file.name}`;
           if (doc.pageCount) docDesc += ` (${doc.pageCount} pages)`;
           if (doc.textLength) docDesc += ` [${doc.textLength} characters extracted]`;
+          if (doc.processor) docDesc += ` [Processed with ${doc.processor}]`;
           docDesc += ` - ${doc.summary}`;
           return docDesc;
         }).join('\n');
@@ -116,7 +118,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         throw new Error('Failed to create document record');
       }
 
-      // Process the document
+      // Process the document with Azure
       const { data: processResult, error: processError } = await supabase.functions.invoke('process-document', {
         body: { documentId: document.id },
         headers: {
@@ -136,10 +138,11 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         summary: processResult.summary,
         textLength: processResult.textLength,
         pageCount: processResult.pageCount,
+        processor: processResult.processor || 'azure_document_intelligence',
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
       };
     } catch (error) {
-      console.error('Document processing error:', error);
+      console.error('Azure document processing error:', error);
       throw error;
     }
   };
@@ -147,7 +150,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     
-    // Validate files
+    // Validate files - now supporting both PDF and images for Azure
     const validFiles = files.filter(file => {
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`File ${file.name} is too large. Maximum size is 10MB.`);
@@ -160,20 +163,20 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       return true;
     });
 
-    // Add files with processing state
+    // Add files with processing state - both PDFs and images now need processing with Azure
     const newAttachedFiles: AttachedFile[] = validFiles.map(file => ({
       file,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-      processing: file.type === 'application/pdf',
-      processed: file.type.startsWith('image/'), // Images don't need processing
+      processing: file.type === 'application/pdf' || file.type.startsWith('image/'), // Both need Azure processing
+      processed: false, // None are processed initially
     }));
 
     setAttachedFiles(prev => [...prev, ...newAttachedFiles]);
 
-    // Process PDF files
+    // Process files with Azure
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i];
-      if (file.type === 'application/pdf') {
+      if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
@@ -183,7 +186,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           // Upload to storage
           const storagePath = await uploadToStorage(file, session.user.id);
           
-          // Process document
+          // Process document with Azure
           const processedFile = await processDocument(file, storagePath);
           
           // Update the file in state
@@ -192,13 +195,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           ));
 
           const successMsg = processedFile.pageCount 
-            ? `Document ${file.name} processed successfully (${processedFile.pageCount} pages, ${processedFile.textLength} characters extracted)`
-            : `Document ${file.name} processed successfully`;
+            ? `Document ${file.name} processed successfully with Azure (${processedFile.pageCount} pages, ${processedFile.textLength} characters extracted)`
+            : `Document ${file.name} processed successfully with Azure (${processedFile.textLength} characters extracted)`;
           
           toast.success(successMsg);
         } catch (error) {
-          console.error('Error processing document:', error);
-          toast.error(`Failed to process ${file.name}: ${error.message}`);
+          console.error('Error processing document with Azure:', error);
+          toast.error(`Failed to process ${file.name} with Azure: ${error.message}`);
           
           // Update file to show error state
           setAttachedFiles(prev => prev.map(af => 
@@ -249,16 +252,19 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const getFileStatusText = (attachedFile: AttachedFile) => {
     if (attachedFile.processing) {
-      return "Processing PDF...";
+      return "Processing with Azure...";
     }
     if (attachedFile.processingError) {
-      return "Processing failed";
+      return "Azure processing failed";
     }
     if (attachedFile.processed && attachedFile.pageCount && attachedFile.textLength) {
-      return `Ready - ${attachedFile.pageCount} pages, ${attachedFile.textLength} chars`;
+      return `Ready - ${attachedFile.pageCount} pages, ${attachedFile.textLength} chars (Azure)`;
+    }
+    if (attachedFile.processed && attachedFile.textLength) {
+      return `Ready - ${attachedFile.textLength} chars (Azure)`;
     }
     if (attachedFile.processed) {
-      return "Ready for analysis";
+      return "Ready for analysis (Azure)";
     }
     return "Uploaded";
   };

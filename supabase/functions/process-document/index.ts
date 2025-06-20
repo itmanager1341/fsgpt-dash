@@ -1,13 +1,5 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// Import PDF.js for Deno - using minified build for reliability
-import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'
-
-// Configure PDF.js worker at module level
-const workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,13 +11,30 @@ interface ProcessDocumentRequest {
   conversationId?: string;
 }
 
+interface AzureAnalyzeResult {
+  status: string;
+  createdDateTime: string;
+  lastUpdatedDateTime: string;
+  analyzeResult?: {
+    content: string;
+    pages: Array<{
+      pageNumber: number;
+      words: Array<{
+        content: string;
+        boundingBox: number[];
+        confidence: number;
+      }>;
+    }>;
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    console.log('=== PROCESS DOCUMENT FUNCTION START ===')
+    console.log('=== AZURE DOCUMENT INTELLIGENCE PROCESS START ===')
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -93,100 +102,115 @@ serve(async (req) => {
 
     console.log(`Downloaded file: ${document.original_name}, size: ${document.file_size} bytes`)
 
-    // Convert to array buffer for PDF processing
-    const arrayBuffer = await fileData.arrayBuffer()
-    
     let extractedText = ''
     let summary = ''
     let pageCount = 0
     let chunks: any[] = []
     
     try {
-      if (document.file_type === 'application/pdf') {
-        console.log('Processing PDF document with PDF.js...')
-        console.log('PDF.js module loaded:', typeof pdfjsLib, 'getDocument available:', typeof pdfjsLib.getDocument)
+      if (document.file_type === 'application/pdf' || document.file_type.startsWith('image/')) {
+        console.log('Processing document with Azure Document Intelligence...')
         
-        // Process PDF using PDF.js
-        const uint8Array = new Uint8Array(arrayBuffer)
+        const azureEndpoint = Deno.env.get('AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT')
+        const azureKey = Deno.env.get('AZURE_DOCUMENT_INTELLIGENCE_KEY')
         
-        // Load PDF document with enhanced configuration
-        const loadingTask = pdfjsLib.getDocument({
-          data: uint8Array,
-          standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/',
-          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
-          cMapPacked: true,
+        if (!azureEndpoint || !azureKey) {
+          throw new Error('Azure Document Intelligence credentials not configured')
+        }
+
+        // Convert file to array buffer
+        const arrayBuffer = await fileData.arrayBuffer()
+        
+        // Submit document for analysis
+        const analyzeUrl = `${azureEndpoint}/formrecognizer/documentModels/prebuilt-read:analyze?api-version=2023-07-31`
+        
+        console.log('Submitting document to Azure for analysis...')
+        const submitResponse = await fetch(analyzeUrl, {
+          method: 'POST',
+          headers: {
+            'Ocp-Apim-Subscription-Key': azureKey,
+            'Content-Type': document.file_type,
+          },
+          body: arrayBuffer,
         })
+
+        if (!submitResponse.ok) {
+          const errorText = await submitResponse.text()
+          throw new Error(`Azure API error: ${submitResponse.status} - ${errorText}`)
+        }
+
+        // Get the operation location from response headers
+        const operationLocation = submitResponse.headers.get('Operation-Location')
+        if (!operationLocation) {
+          throw new Error('No operation location returned from Azure')
+        }
+
+        console.log('Document submitted, polling for results...')
         
-        const pdfDocument = await loadingTask.promise
-        pageCount = pdfDocument.numPages
-        console.log(`PDF loaded successfully with ${pageCount} pages`)
+        // Poll for results
+        let attempts = 0
+        const maxAttempts = 30 // 30 seconds max wait time
+        let result: AzureAnalyzeResult | null = null
         
-        // Extract text from each page with better processing
-        const pageTexts = []
-        for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-          try {
-            const page = await pdfDocument.getPage(pageNum)
-            const textContent = await page.getTextContent()
-            
-            // Process text items with better spacing and structure
-            const textItems = textContent.items.filter((item: any) => 
-              item.str && item.str.trim() && item.str.trim().length > 0
-            )
-            
-            // Group text items by approximate line position
-            const lines: { [key: string]: string[] } = {}
-            textItems.forEach((item: any) => {
-              const lineKey = Math.round(item.transform[5] / 5) * 5 // Group by Y position
-              if (!lines[lineKey]) lines[lineKey] = []
-              lines[lineKey].push(item.str)
-            })
-            
-            // Sort lines by Y position (top to bottom) and join text
-            const sortedLines = Object.keys(lines)
-              .sort((a, b) => parseFloat(b) - parseFloat(a)) // Descending Y (top to bottom)
-              .map(key => lines[key].join(' ').trim())
-              .filter(line => line.length > 0)
-            
-            const pageText = sortedLines.join('\n').trim()
-            
-            if (pageText) {
-              pageTexts.push(pageText)
-              console.log(`Page ${pageNum}: extracted ${pageText.length} characters`)
-            }
-          } catch (pageError) {
-            console.warn(`Error processing page ${pageNum}:`, pageError)
-            // Continue with other pages
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+          attempts++
+          
+          const resultResponse = await fetch(operationLocation, {
+            headers: {
+              'Ocp-Apim-Subscription-Key': azureKey,
+            },
+          })
+
+          if (!resultResponse.ok) {
+            throw new Error(`Failed to get analysis results: ${resultResponse.status}`)
+          }
+
+          result = await resultResponse.json()
+          console.log(`Analysis status: ${result.status} (attempt ${attempts})`)
+          
+          if (result.status === 'succeeded') {
+            break
+          } else if (result.status === 'failed') {
+            throw new Error('Azure document analysis failed')
           }
         }
+
+        if (!result || result.status !== 'succeeded' || !result.analyzeResult) {
+          throw new Error('Document analysis did not complete successfully')
+        }
+
+        // Extract text and page information
+        extractedText = result.analyzeResult.content || ''
+        pageCount = result.analyzeResult.pages?.length || 1
         
-        extractedText = pageTexts.join('\n\n').trim()
-        console.log(`Total extracted text: ${extractedText.length} characters from ${pageCount} pages`)
+        console.log(`Azure extraction complete: ${extractedText.length} characters, ${pageCount} pages`)
 
         // Validate extraction quality
         if (extractedText.length < 100) {
           console.warn('Low text extraction quality - document may be image-based or corrupted')
-          summary = `PDF document "${document.original_name}" processed with limited text extraction. Document may contain primarily images or have extraction issues.`
+          summary = `Document "${document.original_name}" processed with limited text extraction. Document may contain primarily images or have extraction issues.`
         } else {
-          // Create semantic chunks with enhanced processing
+          // Create semantic chunks
           chunks = createEnhancedSemanticChunks(extractedText, documentId, pageCount)
           console.log(`Created ${chunks.length} semantic chunks`)
           
           // Generate summary from first 300 words
           const words = extractedText.trim().split(/\s+/)
           const firstWords = words.slice(0, 300).join(' ')
-          summary = `PDF document "${document.original_name}" (${pageCount} pages) successfully processed. Content preview: ${firstWords}${words.length > 300 ? '...' : ''}`
+          summary = `Document "${document.original_name}" (${pageCount} pages) successfully processed with Azure Document Intelligence. Content preview: ${firstWords}${words.length > 300 ? '...' : ''}`
         }
 
       } else {
-        // Handle non-PDF files (images, etc.)
-        console.log('Processing non-PDF document')
-        extractedText = `Non-PDF document: ${document.original_name}`
+        // Handle unsupported file types
+        console.log('Processing non-supported document type')
+        extractedText = `Unsupported document type: ${document.original_name}`
         summary = `Document "${document.original_name}" uploaded but text extraction not supported for this file type.`
       }
 
     } catch (extractionError) {
-      console.error('Text extraction error:', extractionError)
-      throw new Error(`Failed to extract text from document: ${extractionError.message}`)
+      console.error('Azure document processing error:', extractionError)
+      throw new Error(`Failed to process document with Azure: ${extractionError.message}`)
     }
 
     // Store chunks in database if we have any
@@ -214,7 +238,8 @@ serve(async (req) => {
           text_length: extractedText.length,
           chunk_count: chunks.length,
           processing_timestamp: new Date().toISOString(),
-          extraction_quality: extractedText.length > 100 ? 'good' : 'limited'
+          extraction_quality: extractedText.length > 100 ? 'good' : 'limited',
+          processor: 'azure_document_intelligence'
         }
       })
       .eq('id', documentId)
@@ -223,7 +248,7 @@ serve(async (req) => {
       throw updateError
     }
 
-    console.log(`Document ${documentId} processed successfully - ${extractedText.length} chars, ${chunks.length} chunks`)
+    console.log(`Document ${documentId} processed successfully with Azure - ${extractedText.length} chars, ${chunks.length} chunks`)
 
     return new Response(
       JSON.stringify({
@@ -233,13 +258,14 @@ serve(async (req) => {
         extractedText: extractedText.substring(0, 500) + (extractedText.length > 500 ? '...' : ''),
         chunksCreated: chunks.length,
         pageCount,
-        textLength: extractedText.length
+        textLength: extractedText.length,
+        processor: 'azure_document_intelligence'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
-    console.error('=== PROCESS DOCUMENT ERROR ===')
+    console.error('=== AZURE DOCUMENT PROCESSING ERROR ===')
     console.error('Error:', error)
     
     // Try to update document status to failed

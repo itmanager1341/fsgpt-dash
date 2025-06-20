@@ -3,33 +3,42 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Trash2, Eye, Loader2 } from 'lucide-react';
+import { FileText, Trash2, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { cleanupStuckDocuments, getDocumentProcessingStats } from '@/utils/documentCleanup';
 
 interface Document {
   id: string;
   original_name: string;
   file_size: number;
   processing_status: string;
+  processing_error?: string;
   summary?: string;
   uploaded_at: string;
   upload_status: string;
+  metadata?: any;
 }
 
 const DocumentLibrary: React.FC = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
 
   const loadDocuments = async () => {
     try {
       const { data, error } = await supabase
         .from('document_uploads')
-        .select('id, original_name, file_size, processing_status, summary, uploaded_at, upload_status')
+        .select('id, original_name, file_size, processing_status, processing_error, summary, uploaded_at, upload_status, metadata')
         .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
       setDocuments(data || []);
+
+      // Load stats
+      const documentStats = await getDocumentProcessingStats();
+      setStats(documentStats);
     } catch (error) {
       console.error('Error loading documents:', error);
       toast.error('Failed to load documents');
@@ -38,8 +47,31 @@ const DocumentLibrary: React.FC = () => {
     }
   };
 
+  const handleCleanup = async () => {
+    setCleaningUp(true);
+    try {
+      const cleaned = await cleanupStuckDocuments();
+      if (cleaned > 0) {
+        toast.success(`Cleaned up ${cleaned} stuck documents`);
+        await loadDocuments(); // Reload to show updated status
+      } else {
+        toast.info('No stuck documents found');
+      }
+    } catch (error) {
+      toast.error('Failed to cleanup documents');
+    } finally {
+      setCleaningUp(false);
+    }
+  };
+
   const deleteDocument = async (documentId: string) => {
     try {
+      // Also delete associated chunks
+      await supabase
+        .from('document_chunks')
+        .delete()
+        .eq('document_id', documentId);
+
       const { error } = await supabase
         .from('document_uploads')
         .delete()
@@ -49,22 +81,36 @@ const DocumentLibrary: React.FC = () => {
       
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       toast.success('Document deleted successfully');
+      
+      // Reload stats
+      const documentStats = await getDocumentProcessingStats();
+      setStats(documentStats);
     } catch (error) {
       console.error('Error deleting document:', error);
       toast.error('Failed to delete document');
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, error?: string) => {
     switch (status) {
       case 'completed':
         return <Badge variant="default" className="bg-green-100 text-green-800">Processed</Badge>;
       case 'processing':
         return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Processing</Badge>;
       case 'failed':
-        return <Badge variant="destructive">Failed</Badge>;
+        return (
+          <Badge variant="destructive" className="flex items-center gap-1">
+            <AlertTriangle size={12} />
+            Failed
+          </Badge>
+        );
+      case 'pending':
+        return <Badge variant="outline" className="flex items-center gap-1">
+          <Loader2 size={12} className="animate-spin" />
+          Pending
+        </Badge>;
       default:
-        return <Badge variant="outline">Pending</Badge>;
+        return <Badge variant="outline">Unknown</Badge>;
     }
   };
 
@@ -74,6 +120,26 @@ const DocumentLibrary: React.FC = () => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getProcessingDetails = (doc: Document) => {
+    const metadata = doc.metadata || {};
+    const details = [];
+    
+    if (metadata.text_length) {
+      details.push(`${metadata.text_length.toLocaleString()} chars`);
+    }
+    if (metadata.page_count) {
+      details.push(`${metadata.page_count} pages`);
+    }
+    if (metadata.chunk_count) {
+      details.push(`${metadata.chunk_count} chunks`);
+    }
+    if (metadata.processing_time_seconds) {
+      details.push(`${metadata.processing_time_seconds}s processing`);
+    }
+    
+    return details.join(' • ');
   };
 
   useEffect(() => {
@@ -89,14 +155,65 @@ const DocumentLibrary: React.FC = () => {
     );
   }
 
+  const stuckCount = documents.filter(doc => 
+    ['processing', 'pending'].includes(doc.processing_status)
+  ).length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Document Library</h3>
-        <Button variant="outline" size="sm" onClick={loadDocuments}>
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          {stuckCount > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCleanup}
+              disabled={cleaningUp}
+              className="text-orange-600"
+            >
+              {cleaningUp ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Cleanup Stuck ({stuckCount})
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={loadDocuments}>
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {stats && (
+        <Card>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div className="font-medium">Total Documents</div>
+                <div className="text-muted-foreground">{stats.total}</div>
+              </div>
+              <div>
+                <div className="font-medium">Total Size</div>
+                <div className="text-muted-foreground">{stats.totalSizeMB} MB</div>
+              </div>
+              <div>
+                <div className="font-medium">Recent (24h)</div>
+                <div className="text-muted-foreground">{stats.recentCount}</div>
+              </div>
+              <div>
+                <div className="font-medium">Status</div>
+                <div className="text-muted-foreground">
+                  ✓{stats.statusCounts.completed || 0} 
+                  {stats.statusCounts.failed ? ` ✗${stats.statusCounts.failed}` : ''}
+                  {stats.statusCounts.processing ? ` ⏳${stats.statusCounts.processing}` : ''}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {documents.length === 0 ? (
         <Card>
@@ -125,19 +242,35 @@ const DocumentLibrary: React.FC = () => {
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatFileSize(document.file_size)} • {new Date(document.uploaded_at).toLocaleDateString()}
                       </p>
+                      {getProcessingDetails(document) && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {getProcessingDetails(document)}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {getStatusBadge(document.processing_status)}
+                    {getStatusBadge(document.processing_status, document.processing_error)}
                   </div>
                 </div>
               </CardHeader>
-              {document.summary && (
+              
+              {(document.summary || document.processing_error) && (
                 <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground">
-                    {document.summary}
-                  </p>
-                  <div className="flex items-center justify-end mt-3 space-x-2">
+                  {document.processing_error ? (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md mb-3">
+                      <p className="text-sm text-red-800 font-medium">Processing Error:</p>
+                      <p className="text-sm text-red-700">{document.processing_error}</p>
+                    </div>
+                  ) : null}
+                  
+                  {document.summary && (
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {document.summary}
+                    </p>
+                  )}
+                  
+                  <div className="flex items-center justify-end space-x-2">
                     <Button
                       variant="ghost"
                       size="sm"

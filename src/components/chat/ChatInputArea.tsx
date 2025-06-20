@@ -76,10 +76,10 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     fileInputRef.current?.click();
   };
 
-  // Enhanced storage naming function
-  const generateFriendlyStoragePath = (file: File, userId: string, documentId: string): string => {
-    const date = new Date();
-    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+  // Enhanced storage naming function with uniqueness guarantee
+  const generateUniqueStoragePath = (file: File, userId: string, documentId: string): string => {
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
     
     // Sanitize filename - remove special chars, keep alphanumeric, dots, hyphens, underscores
     const sanitizedName = file.name
@@ -90,21 +90,24 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const fileExt = file.name.split('.').pop();
     const nameWithoutExt = sanitizedName.replace(`.${fileExt}`, '');
     
-    // Format: YYYY-MM-DD_filename_docId.ext
-    return `${userId}/${dateStr}_${nameWithoutExt}_${documentId.substring(0, 8)}.${fileExt}`;
+    // Format: userId/timestamp_randomSuffix_filename_docId.ext
+    return `${userId}/${timestamp}_${randomSuffix}_${nameWithoutExt}_${documentId.substring(0, 8)}.${fileExt}`;
   };
 
   const uploadToStorage = async (file: File, userId: string, documentId: string): Promise<string> => {
-    const fileName = generateFriendlyStoragePath(file, userId, documentId);
+    const fileName = generateUniqueStoragePath(file, userId, documentId);
+    console.log(`Attempting to upload file with unique path: ${fileName}`);
     
     const { error: uploadError } = await supabase.storage
       .from('documents')
       .upload(fileName, file);
 
     if (uploadError) {
-      throw uploadError;
+      console.error('Storage upload error:', uploadError);
+      throw new Error(`Storage upload failed: ${uploadError.message}`);
     }
 
+    console.log(`File uploaded successfully to: ${fileName}`);
     return fileName;
   };
 
@@ -115,11 +118,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         throw new Error('No session found');
       }
 
-      // Upload to storage with friendly naming
-      const storagePath = await uploadToStorage(file, session.user.id, documentId);
-      console.log(`File uploaded with friendly name: ${storagePath}`);
+      console.log(`Starting document processing for ${file.name} (${file.size} bytes)`);
 
-      // Process the document with Azure
+      // Upload to storage with unique naming
+      const storagePath = await uploadToStorage(file, session.user.id, documentId);
+
+      // Process the document with Azure (with extended timeout)
+      console.log('Invoking Azure document processing with extended timeout...');
       const { data: processResult, error: processError } = await supabase.functions.invoke('process-document', {
         body: { documentId },
         headers: {
@@ -128,21 +133,35 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       });
 
       if (processError) {
-        throw processError;
+        console.error('Azure processing error:', processError);
+        throw new Error(`Azure processing failed: ${processError.message}`);
       }
 
-      // Validate processing quality
-      const isQualityGood = processResult.textLength > 100 && 
-                           processResult.chunksCreated > 0 && 
-                           (processResult.pageCount ? processResult.chunksCreated >= processResult.pageCount : true);
+      console.log('Azure processing result:', processResult);
 
-      if (!isQualityGood) {
-        console.warn(`Document processing quality warning:`, {
+      // Enhanced validation for processing quality
+      const isQualityGood = processResult.textLength > 100 && 
+                           processResult.chunksCreated > 0;
+
+      // For large documents, expect more content
+      const expectedMinChars = (file.size > 1000000) ? 10000 : 1000; // 1MB+ files should have substantial text
+      
+      if (processResult.textLength < expectedMinChars) {
+        console.warn(`Document processing quality warning for large file:`, {
+          fileSize: file.size,
           textLength: processResult.textLength,
           chunksCreated: processResult.chunksCreated,
-          pageCount: processResult.pageCount
+          pageCount: processResult.pageCount,
+          expectedMinChars
         });
-        toast.error(`Document ${file.name} may have incomplete processing. Text: ${processResult.textLength} chars, Chunks: ${processResult.chunksCreated}`);
+        
+        if (processResult.textLength < 1000) {
+          toast.error(`Document processing may be incomplete. Only ${processResult.textLength} characters extracted from ${processResult.pageCount || 'unknown'} pages.`);
+        } else {
+          toast.warning(`Document processed but may have incomplete text extraction: ${processResult.textLength} chars from ${processResult.pageCount || 'unknown'} pages.`);
+        }
+      } else {
+        toast.success(`Document processed successfully: ${processResult.textLength} characters, ${processResult.chunksCreated} chunks from ${processResult.pageCount || 'unknown'} pages.`);
       }
 
       return {
@@ -157,7 +176,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
       };
     } catch (error) {
-      console.error('Azure document processing error:', error);
+      console.error('Document processing error:', error);
       throw error;
     }
   };
@@ -165,10 +184,10 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     
-    // Validate files - now supporting both PDF and images for Azure
+    // Validate files
     const validFiles = files.filter(file => {
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error(`File ${file.name} is too large. Maximum size is 10MB.`);
+      if (file.size > 20 * 1024 * 1024) { // Increased to 20MB for large PDFs
+        toast.error(`File ${file.name} is too large. Maximum size is 20MB.`);
         return false;
       }
       if (file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
@@ -178,89 +197,82 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       return true;
     });
 
-    // Add files with processing state - both PDFs and images now need processing with Azure
+    // Add files with processing state
     const newAttachedFiles: AttachedFile[] = validFiles.map(file => ({
       file,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-      processing: file.type === 'application/pdf' || file.type.startsWith('image/'), // Both need Azure processing
-      processed: false, // None are processed initially
+      processing: true,
+      processed: false,
     }));
 
     setAttachedFiles(prev => [...prev, ...newAttachedFiles]);
 
-    // Process files with Azure
+    // Process files with enhanced error handling
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i];
-      if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            throw new Error('Authentication required');
-          }
-
-          // Create document record first to get ID for storage naming
-          const { data: document, error: docError } = await supabase
-            .from('document_uploads')
-            .insert({
-              user_id: session.user.id,
-              file_name: `doc_${Date.now()}`,
-              original_name: file.name,
-              storage_path: 'temp', // Will be updated after upload
-              file_size: file.size,
-              file_type: file.type,
-              upload_status: 'completed'
-            })
-            .select()
-            .single();
-
-          if (docError || !document) {
-            throw new Error('Failed to create document record');
-          }
-
-          // Generate friendly storage path and upload
-          const storagePath = generateFriendlyStoragePath(file, session.user.id, document.id);
-          
-          const { error: uploadError } = await supabase.storage
-            .from('documents')
-            .upload(storagePath, file);
-
-          if (uploadError) {
-            throw uploadError;
-          }
-
-          // Update document record with correct storage path
-          await supabase
-            .from('document_uploads')
-            .update({ storage_path: storagePath })
-            .eq('id', document.id);
-          
-          // Process document with Azure
-          const processedFile = await processDocument(file, document.id);
-          
-          // Update the file in state
-          setAttachedFiles(prev => prev.map(af => 
-            af.file === file ? processedFile : af
-          ));
-
-          const successMsg = processedFile.pageCount 
-            ? `Document ${file.name} processed successfully with Azure (${processedFile.pageCount} pages, ${processedFile.textLength} characters extracted)`
-            : `Document ${file.name} processed successfully with Azure (${processedFile.textLength} characters extracted)`;
-          
-          toast.success(successMsg);
-        } catch (error) {
-          console.error('Error processing document with Azure:', error);
-          toast.error(`Failed to process ${file.name} with Azure: ${error.message}`);
-          
-          // Update file to show error state
-          setAttachedFiles(prev => prev.map(af => 
-            af.file === file ? { 
-              ...af, 
-              processing: false, 
-              processed: false, 
-              processingError: error.message 
-            } : af
-          ));
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('Authentication required');
         }
+
+        console.log(`Processing file ${i + 1}/${validFiles.length}: ${file.name} (${file.size} bytes)`);
+
+        // Create document record first
+        const { data: document, error: docError } = await supabase
+          .from('document_uploads')
+          .insert({
+            user_id: session.user.id,
+            file_name: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+            original_name: file.name,
+            storage_path: 'temp', // Will be updated after upload
+            file_size: file.size,
+            file_type: file.type,
+            upload_status: 'completed',
+            processing_status: 'processing'
+          })
+          .select()
+          .single();
+
+        if (docError || !document) {
+          throw new Error(`Failed to create document record: ${docError?.message}`);
+        }
+
+        console.log(`Created document record: ${document.id}`);
+        
+        // Process document with improved error handling
+        const processedFile = await processDocument(file, document.id);
+        
+        // Update the file in state
+        setAttachedFiles(prev => prev.map(af => 
+          af.file === file ? processedFile : af
+        ));
+
+      } catch (error) {
+        console.error(`Error processing file ${file.name}:`, error);
+        
+        const errorMessage = error.message || 'Unknown error occurred';
+        let userFriendlyMessage = `Failed to process ${file.name}`;
+        
+        if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+          userFriendlyMessage += ' (processing timeout - file may be too large)';
+        } else if (errorMessage.includes('duplicate') || errorMessage.includes('Duplicate')) {
+          userFriendlyMessage += ' (file already exists - please rename and try again)';
+        } else if (errorMessage.includes('storage')) {
+          userFriendlyMessage += ' (storage error)';
+        }
+        
+        toast.error(`${userFriendlyMessage}: ${errorMessage}`);
+        
+        // Update file to show error state with detailed error
+        setAttachedFiles(prev => prev.map(af => 
+          af.file === file ? { 
+            ...af, 
+            processing: false, 
+            processed: false, 
+            processingError: errorMessage
+          } : af
+        ));
       }
     }
     
@@ -292,24 +304,21 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     if (attachedFile.processed) {
       return <CheckCircle size={16} className="text-green-500" />;
     }
-    if (attachedFile.file.type === 'application/pdf') {
-      return <FileText size={16} className="text-gray-500" />;
-    }
     return <FileText size={16} className="text-gray-500" />;
   };
 
   const getFileStatusText = (attachedFile: AttachedFile) => {
     if (attachedFile.processing) {
-      return "Processing with Azure...";
+      return "Processing with Azure (may take up to 5 minutes for large files)...";
     }
     if (attachedFile.processingError) {
-      return "Azure processing failed";
+      return `Processing failed: ${attachedFile.processingError}`;
     }
     if (attachedFile.processed && attachedFile.pageCount && attachedFile.textLength) {
-      return `Ready - ${attachedFile.pageCount} pages, ${attachedFile.textLength} chars (Azure)`;
+      return `Ready - ${attachedFile.pageCount} pages, ${attachedFile.textLength.toLocaleString()} chars (Azure)`;
     }
     if (attachedFile.processed && attachedFile.textLength) {
-      return `Ready - ${attachedFile.textLength} chars (Azure)`;
+      return `Ready - ${attachedFile.textLength.toLocaleString()} chars (Azure)`;
     }
     if (attachedFile.processed) {
       return "Ready for analysis (Azure)";

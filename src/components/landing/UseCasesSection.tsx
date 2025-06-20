@@ -1,80 +1,85 @@
 
-import { useState } from 'react';
 import { AnimatedTransition } from '@/components/AnimatedTransition';
-import { cn } from '@/lib/utils';
-import { UserType } from './UseCasesTypes';
-import { userCasesData, booksData } from './UserCasesData';
-
-// Import individual case components
-import MarketersCase from './UserCases/MarketersCase';
-import DesignersCase from './UserCases/DesignersCase';
-import WritersCase from './UserCases/WritersCase';
-import ResearchersCase from './UserCases/ResearchersCase';
-import DevelopersCase from './UserCases/DevelopersCase';
-import EveryoneCase from './UserCases/EveryoneCase';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
+import { FileAudio, FileVideo, Search, Megaphone, FileText, Users } from 'lucide-react';
 
 interface UseCasesSectionProps {
   show: boolean;
 }
 
-const UseCasesSection = ({ show }: UseCasesSectionProps) => {
-  const [activeUserType, setActiveUserType] = useState<UserType>('Staff');
-  const currentCase = userCasesData[activeUserType];
+const workflowExamples = [
+  {
+    icon: <FileAudio className="w-8 h-8 text-white" />,
+    title: "Upload audio and video files",
+    subtitle: "and summarize",
+    description: "Upload meeting recordings, client calls, or presentation videos. Get instant AI-powered summaries, key insights, and action items extracted automatically.",
+    background: 'bg-[#0ea5e9]'
+  },
+  {
+    icon: <Megaphone className="w-8 h-8 text-white" />,
+    title: "Create marketing campaign",
+    subtitle: "outlines",
+    description: "Generate comprehensive marketing strategies, campaign timelines, and content plans tailored to your target audience and business objectives.",
+    background: 'bg-[#8b5cf6]'
+  },
+  {
+    icon: <Search className="w-8 h-8 text-white" />,
+    title: "Search company data",
+    subtitle: "and documents",
+    description: "Quickly find information across all your uploaded documents, research reports, and knowledge base using intelligent semantic search.",
+    background: 'bg-[#059669]'
+  },
+  {
+    icon: <FileText className="w-8 h-8 text-white" />,
+    title: "Generate client proposals",
+    subtitle: "and reports",
+    description: "Create professional proposals, executive summaries, and detailed reports based on your research and client requirements.",
+    background: 'bg-[#f97316]'
+  },
+  {
+    icon: <Users className="w-8 h-8 text-white" />,
+    title: "Analyze stakeholder",
+    subtitle: "feedback",
+    description: "Process survey responses, interview transcripts, and feedback forms to identify patterns, sentiment, and actionable insights.",
+    background: 'bg-[#d946ef]'
+  }
+];
 
+const UseCasesSection = ({ show }: UseCasesSectionProps) => {
   return (
     <AnimatedTransition show={show} animation="slide-up" duration={600}>
       <div className="py-24 md:py-32">
         <div className="max-w-6xl mx-auto px-4 mb-16">
           <h2 className="text-3xl text-center mb-12 tracking-tight text-blue-700 font-bold md:text-7xl">
-            Built for every FSG role.
+            Simplify your workflow.
           </h2>
           
-          <div className="flex justify-center space-x-8 mb-10">
-            {Object.keys(userCasesData).map(type => (
-              <button
-                key={type}
-                className={cn(
-                  "relative pb-1",
-                  activeUserType === type
-                    ? "text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground transition-colors"
-                )}
-                onClick={() => setActiveUserType(type as UserType)}
-              >
-                {type}
-                {activeUserType === type && (
-                  <span className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-primary rounded-full" />
-                )}
-              </button>
-            ))}
-          </div>
-          
-          <div className={cn("rounded-xl overflow-hidden transition-all duration-500", currentCase.background)}>
-            <div className="p-10 md:p-16">
-              <div className="text-center mb-4">
-                <p className="uppercase tracking-wide text-sm font-medium mb-6 text-white">
-                  Made for {activeUserType}
-                </p>
-                <h3 className="text-4xl md:text-5xl font-medium mb-2 text-white">
-                  {currentCase.title} 
-                  <span className="block italic font-light">{currentCase.subtitle}</span>
-                </h3>
-              </div>
-              
-              {/* Show description and quote for FSG roles */}
-              <div className="text-center text-white">
-                <p className="text-lg mb-6 max-w-3xl mx-auto opacity-90">
-                  {currentCase.description}
-                </p>
-                <blockquote className="text-2xl font-light italic mb-8">
-                  "{currentCase.quote}"
-                </blockquote>
-                <button className="bg-white text-blue-600 px-8 py-3 rounded-full font-medium hover:bg-gray-100 transition-colors">
-                  {currentCase.ctaText}
-                </button>
-              </div>
-            </div>
-          </div>
+          <Carousel className="w-full max-w-5xl mx-auto">
+            <CarouselContent className="-ml-2 md:-ml-4">
+              {workflowExamples.map((workflow, index) => (
+                <CarouselItem key={index} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
+                  <div className={`rounded-xl overflow-hidden transition-all duration-500 h-full ${workflow.background}`}>
+                    <div className="p-8 h-full flex flex-col">
+                      <div className="flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-6 mx-auto">
+                        {workflow.icon}
+                      </div>
+                      <div className="text-center text-white flex-1">
+                        <h3 className="text-xl md:text-2xl font-medium mb-2">
+                          {workflow.title}
+                          <span className="block italic font-light text-lg">{workflow.subtitle}</span>
+                        </h3>
+                        <p className="text-sm md:text-base opacity-90 leading-relaxed">
+                          {workflow.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="hidden md:flex" />
+            <CarouselNext className="hidden md:flex" />
+          </Carousel>
         </div>
       </div>
     </AnimatedTransition>

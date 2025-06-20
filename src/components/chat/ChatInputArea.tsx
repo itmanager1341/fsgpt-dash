@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -123,6 +124,19 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       // Upload to storage with unique naming
       const storagePath = await uploadToStorage(file, session.user.id, documentId);
 
+      // CRITICAL FIX: Update the document record with the actual storage path
+      const { error: updateError } = await supabase
+        .from('document_uploads')
+        .update({ storage_path: storagePath })
+        .eq('id', documentId);
+
+      if (updateError) {
+        console.error('Failed to update storage path:', updateError);
+        throw new Error(`Failed to update document record: ${updateError.message}`);
+      }
+
+      console.log(`Updated document ${documentId} with storage path: ${storagePath}`);
+
       // Process the document with Azure (with extended timeout)
       console.log('Invoking Azure document processing with extended timeout...');
       const { data: processResult, error: processError } = await supabase.functions.invoke('process-document', {
@@ -218,7 +232,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
         console.log(`Processing file ${i + 1}/${validFiles.length}: ${file.name} (${file.size} bytes)`);
 
-        // Create document record first
+        // Create document record first with temporary storage path
         const { data: document, error: docError } = await supabase
           .from('document_uploads')
           .insert({

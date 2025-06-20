@@ -92,14 +92,34 @@ serve(async (req) => {
 
     console.log(`Found document: ${document.original_name}, type: ${document.file_type}, size: ${document.file_size} bytes`)
 
-    // Download file from storage
+    // CRITICAL FIX: Validate storage path before attempting download
+    if (!document.storage_path || document.storage_path === 'temp') {
+      console.error('Invalid storage path:', document.storage_path)
+      throw new Error(`Document has invalid storage path: ${document.storage_path || 'null'}. Upload may have failed.`)
+    }
+
+    console.log(`Using storage path: ${document.storage_path}`)
+
+    // Download file from storage with better error handling
     const { data: fileData, error: downloadError } = await supabaseClient.storage
       .from('documents')
       .download(document.storage_path)
 
     if (downloadError || !fileData) {
       console.error('Storage download error:', downloadError)
-      throw new Error(`Failed to download document: ${downloadError?.message}`)
+      
+      // Check if file exists
+      const { data: fileExists } = await supabaseClient.storage
+        .from('documents')
+        .list(document.storage_path.split('/').slice(0, -1).join('/'), {
+          search: document.storage_path.split('/').pop()
+        })
+
+      if (!fileExists || fileExists.length === 0) {
+        throw new Error(`File not found in storage at path: ${document.storage_path}. The file may have been deleted or the upload failed.`)
+      }
+      
+      throw new Error(`Failed to download document: ${downloadError?.message || 'Unknown storage error'}`)
     }
 
     console.log(`Downloaded file: ${document.original_name}, actual size: ${(await fileData.arrayBuffer()).byteLength} bytes`)

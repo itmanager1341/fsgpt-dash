@@ -19,44 +19,54 @@ import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// Create QueryClient instance outside of component to avoid recreation
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <AuthProvider>
-        <UserApprovalGuard>
-          <TooltipProvider>
-            <Toaster />
-            <BrowserRouter>
-              <div className="min-h-screen bg-background">
-                <Navbar />
-                <main>
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    <Route path="/chat" element={<ChatPage />} />
-                    <Route path="/search" element={<Navigate to="/chat" replace />} />
-                    <Route path="/manage" element={<ManagePage />} />
-                    <Route path="/admin" element={
-                      <AdminRoute>
-                        <AdminPage />
-                      </AdminRoute>
-                    } />
-                    <Route path="/import" element={<Import />} />
-                    <Route path="/how" element={<HowPage />} />
-                    <Route path="/why" element={<WhyPage />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </main>
-              </div>
-            </BrowserRouter>
-          </TooltipProvider>
-        </UserApprovalGuard>
-      </AuthProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <UserApprovalGuard>
+            <TooltipProvider>
+              <Toaster />
+              <BrowserRouter>
+                <div className="min-h-screen bg-background">
+                  <Navbar />
+                  <main>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/chat" element={<ChatPage />} />
+                      <Route path="/search" element={<Navigate to="/chat" replace />} />
+                      <Route path="/manage" element={<ManagePage />} />
+                      <Route path="/admin" element={
+                        <AdminRoute>
+                          <AdminPage />
+                        </AdminRoute>
+                      } />
+                      <Route path="/import" element={<Import />} />
+                      <Route path="/how" element={<HowPage />} />
+                      <Route path="/why" element={<WhyPage />} />
+                      <Route path="/profile" element={<Profile />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </main>
+                </div>
+              </BrowserRouter>
+            </TooltipProvider>
+          </UserApprovalGuard>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+}
 
 export default App;

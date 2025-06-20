@@ -76,18 +76,19 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
   // Enhanced unique key generation to prevent duplicates
   const generateMessageKey = (message: MessageWithLoading, index: number) => {
     // Create a stable hash from content and timestamp for better uniqueness
-    const contentHash = message.content.substring(0, 50).replace(/\s+/g, '');
+    const contentHash = message.content.substring(0, 20).replace(/\s+/g, '');
     const timestamp = new Date(message.created_at).getTime();
+    const rolePrefix = message.role.substring(0, 1);
     
     // Prioritize database IDs over local IDs, but ensure uniqueness
     if (message.id && !message.id.startsWith('temp-')) {
-      return `db-${message.id}-${message.role}`;
+      return `${rolePrefix}-db-${message.id}`;
     }
     if (message.localId) {
-      return `local-${message.localId}-${timestamp}`;
+      return `${rolePrefix}-local-${message.localId}`;
     }
-    // Enhanced fallback with content hash and timestamp
-    return `fallback-${message.role}-${index}-${timestamp}-${contentHash}`;
+    // Enhanced fallback with better uniqueness
+    return `${rolePrefix}-fallback-${index}-${timestamp}-${contentHash}`;
   };
 
   return (

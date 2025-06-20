@@ -72,7 +72,7 @@ const ChatInterface: React.FC = () => {
     deleteConversation(conversationId);
   };
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, provider?: string, model?: string, documentIds?: string[]) => {
     let processedContent = content;
     
     // Modify prompt for search mode
@@ -85,10 +85,10 @@ const ChatInterface: React.FC = () => {
       const title = chatMode === 'search' ? 'Search Session' : undefined;
       const newSession = await createConversation(title, content);
       if (newSession) {
-        await sendMessage(newSession.conversation.id, processedContent, selectedProvider, selectedModel, true);
+        await sendMessage(newSession.conversation.id, processedContent, selectedProvider, selectedModel, documentIds, true);
       }
     } else {
-      await sendMessage(activeSession.conversation.id, processedContent, selectedProvider, selectedModel, true);
+      await sendMessage(activeSession.conversation.id, processedContent, selectedProvider, selectedModel, documentIds, true);
     }
   };
 

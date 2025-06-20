@@ -131,6 +131,7 @@ export const useChat = () => {
     content: string, 
     provider?: string, 
     model?: string,
+    documentIds?: string[],
     enableStreaming = true
   ) => {
     // Create optimistic message first
@@ -210,6 +211,7 @@ export const useChat = () => {
           provider,
           model,
           stream: enableStreaming,
+          documentIds, // Pass document IDs separately
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,

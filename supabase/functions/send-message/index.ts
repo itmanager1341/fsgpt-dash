@@ -13,6 +13,7 @@ interface SendMessageRequest {
   provider?: string;
   model?: string;
   stream?: boolean;
+  documentIds?: string[];
 }
 
 serve(async (req) => {
@@ -88,19 +89,20 @@ serve(async (req) => {
       message, 
       provider = 'openai', 
       model = 'gpt-4.1-2025-04-14',
-      stream = true 
+      stream = true,
+      documentIds = []
     }: SendMessageRequest = await req.json()
 
     console.log(`Processing message for conversation ${conversationId} with ${provider}:${model}`)
+    console.log(`Document IDs provided: ${documentIds.length}`)
 
-    // Enhanced document context retrieval with proper column name
+    // Enhanced document context retrieval using provided document IDs
     let documentContext = ''
-    const documentReferences = message.match(/\[Documents available for analysis:(.*?)\]/s);
     
-    if (documentReferences) {
-      console.log('Document references found, fetching enhanced document content...');
+    if (documentIds && documentIds.length > 0) {
+      console.log('Document IDs provided, fetching enhanced document content...');
       
-      // Get processed documents with full text content - using correct column name
+      // Get processed documents with full text content
       const { data: documents, error: docError } = await supabaseClient
         .from('document_uploads')
         .select(`
@@ -118,8 +120,7 @@ serve(async (req) => {
         `)
         .eq('user_id', user.user.id)
         .eq('processing_status', 'completed')
-        .order('uploaded_at', { ascending: false }) // Fixed: use uploaded_at instead of created_at
-        .limit(5); // Increased limit to get more documents
+        .in('id', documentIds);
 
       if (!docError && documents && documents.length > 0) {
         console.log(`Found ${documents.length} processed documents with full content`);
@@ -176,13 +177,13 @@ serve(async (req) => {
       }
     }
 
-    // Store user message with user_id
+    // Store user message with user_id (clean message without document metadata)
     const { data: userMessage, error: userMessageError } = await supabaseClient
       .from('messages')
       .insert({
         conversation_id: conversationId,
         role: 'user',
-        content: message,
+        content: message, // Clean message content
         user_id: user.user.id,
       })
       .select()
@@ -238,11 +239,12 @@ IMPORTANT INSTRUCTIONS:
 - Quote exact text when answering questions about specific content
 - If information spans multiple sections, synthesize it comprehensively
 - Always cite which document and section you're referencing
+- Keep responses concise but thorough - focus on the most relevant information
 
 COMPLETE DOCUMENT CONTENT AVAILABLE:
 ${documentContext}
 
-Please provide thorough, detailed analysis based on the COMPLETE document content provided above. Do not indicate that you only have partial access - you have the full documents.`;
+Please provide thorough, detailed analysis based on the COMPLETE document content provided above. Do not indicate that you only have partial access - you have the full documents. Keep your response focused and well-structured.`;
 
       contextMessages.unshift({
         role: 'system',
@@ -250,9 +252,8 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
       });
     }
 
-    // Add current message (clean it of document metadata for the AI)
-    const cleanMessage = message.replace(/\[Documents available for analysis:.*?\]/s, '').trim();
-    contextMessages.push({ role: 'user', content: cleanMessage });
+    // Add current message (already clean)
+    contextMessages.push({ role: 'user', content: message });
 
     console.log(`Calling ${provider} API with ${contextMessages.length} messages (including ${documentContext.length} chars of document context)`);
 
@@ -327,7 +328,7 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
       usage = llmData.usage || {}
     }
 
-    console.log(`Generated comprehensive response (${assistantMessage.length} chars)`)
+    console.log(`Generated response (${assistantMessage.length} chars)`)
 
     // Calculate cost (approximate)
     const promptTokens = usage.prompt_tokens || 0
@@ -395,7 +396,7 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
       .update({ updated_at: new Date().toISOString() })
       .eq('id', conversationId)
 
-    console.log(`Message processed successfully with comprehensive document context. Cost: $${cost.toFixed(4)}`)
+    console.log(`Message processed successfully with document context. Cost: $${cost.toFixed(4)}`)
 
     return new Response(
       JSON.stringify({

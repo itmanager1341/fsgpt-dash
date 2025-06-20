@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ChatInputAreaProps {
-  onSendMessage: (content: string, provider?: string, model?: string) => void;
+  onSendMessage: (content: string, provider?: string, model?: string, documentIds?: string[]) => void;
   disabled?: boolean;
   placeholder?: string;
 }
@@ -38,23 +37,15 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const handleSend = () => {
     if ((message.trim() || attachedFiles.length > 0) && !disabled) {
-      let finalMessage = message.trim();
+      // Send clean user message without document metadata
+      const cleanMessage = message.trim();
       
-      // Include processed document information with enhanced details
-      const processedDocs = attachedFiles.filter(af => af.processed && af.summary);
-      if (processedDocs.length > 0) {
-        const docInfo = processedDocs.map(doc => {
-          let docDesc = `Document: ${doc.file.name}`;
-          if (doc.pageCount) docDesc += ` (${doc.pageCount} pages)`;
-          if (doc.textLength) docDesc += ` [${doc.textLength} characters extracted]`;
-          if (doc.processor) docDesc += ` [Processed with ${doc.processor}]`;
-          docDesc += ` - ${doc.summary}`;
-          return docDesc;
-        }).join('\n');
-        finalMessage += `\n\n[Documents available for analysis:\n${docInfo}]`;
-      }
+      // Get processed document IDs to pass separately
+      const processedDocumentIds = attachedFiles
+        .filter(af => af.processed && af.documentId)
+        .map(af => af.documentId!);
       
-      onSendMessage(finalMessage);
+      onSendMessage(cleanMessage, undefined, undefined, processedDocumentIds);
       setMessage('');
       setIsTyping(false);
       setAttachedFiles([]);

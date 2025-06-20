@@ -1,1 +1,25 @@
-project_id = "grebpkcwmurbxorodiyb"
+
+project_id = "rjhfhulvbfavwihkxnmt"
+
+[auth]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+# Edge Functions
+[functions.create-conversation]
+verify_jwt = true
+
+[functions.send-message]
+verify_jwt = true
+
+[functions.process-document]
+verify_jwt = true
+# Increase timeout for large document processing (10 minutes)
+timeout = 600
+
+[functions.update-model-pricing]
+verify_jwt = true

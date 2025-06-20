@@ -110,12 +110,23 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         throw new Error('No session found');
       }
 
-      console.log(`Starting document processing for ${file.name} (${file.size} bytes)`);
+      const fileSizeMB = Math.round(file.size / (1024 * 1024));
+      const isLargeFile = fileSizeMB > 10;
+      const isVeryLargeFile = fileSizeMB > 50;
+
+      console.log(`Starting document processing for ${file.name} (${fileSizeMB}MB)`);
+
+      // Show appropriate warning for large files
+      if (isVeryLargeFile) {
+        toast.warning(`Processing very large document (${fileSizeMB}MB). This may take 5-10 minutes. Please be patient.`);
+      } else if (isLargeFile) {
+        toast.warning(`Processing large document (${fileSizeMB}MB). This may take 2-5 minutes.`);
+      }
 
       // Upload to storage with unique naming
       const storagePath = await uploadToStorage(file, session.user.id, documentId);
 
-      // CRITICAL FIX: Update the document record with the actual storage path
+      // Update the document record with the actual storage path
       const { error: updateError } = await supabase
         .from('document_uploads')
         .update({ storage_path: storagePath })
@@ -128,8 +139,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
       console.log(`Updated document ${documentId} with storage path: ${storagePath}`);
 
-      // Process the document with Azure (with extended timeout)
-      console.log('Invoking Azure document processing with extended timeout...');
+      // Process the document with Azure (enhanced timeout handling)
+      console.log('Invoking Azure document processing with enhanced timeout handling...');
       const { data: processResult, error: processError } = await supabase.functions.invoke('process-document', {
         body: { documentId },
         headers: {
@@ -139,34 +150,28 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
       if (processError) {
         console.error('Azure processing error:', processError);
-        throw new Error(`Azure processing failed: ${processError.message}`);
+        
+        // Enhanced error messaging for large documents
+        let errorMessage = `Azure processing failed: ${processError.message}`;
+        if (processError.message.includes('timeout') && isLargeFile) {
+          errorMessage = `Large document processing timeout (${fileSizeMB}MB). This document may be too large or complex. Try splitting it into smaller sections.`;
+        }
+        throw new Error(errorMessage);
       }
 
       console.log('Azure processing result:', processResult);
 
-      // Enhanced validation for processing quality
-      const isQualityGood = processResult.textLength > 100 && 
-                           processResult.chunksCreated > 0;
-
-      // For large documents, expect more content
-      const expectedMinChars = (file.size > 1000000) ? 10000 : 1000; // 1MB+ files should have substantial text
-      
-      if (processResult.textLength < expectedMinChars) {
-        console.warn(`Document processing quality warning for large file:`, {
-          fileSize: file.size,
-          textLength: processResult.textLength,
-          chunksCreated: processResult.chunksCreated,
-          pageCount: processResult.pageCount,
-          expectedMinChars
-        });
-        
-        if (processResult.textLength < 1000) {
-          toast.error(`Document processing may be incomplete. Only ${processResult.textLength} characters extracted from ${processResult.pageCount || 'unknown'} pages.`);
+      // Enhanced success messaging based on document size and results
+      if (processResult.textLength > 1000 && processResult.chunksCreated > 0) {
+        if (isVeryLargeFile) {
+          toast.success(`Very large document processed successfully! ${processResult.textLength.toLocaleString()} characters from ${processResult.pageCount} pages in ${processResult.chunksCreated} chunks.`);
+        } else if (isLargeFile) {
+          toast.success(`Large document processed successfully! ${processResult.textLength.toLocaleString()} characters from ${processResult.pageCount} pages.`);
         } else {
-          toast.warning(`Document processed but may have incomplete text extraction: ${processResult.textLength} chars from ${processResult.pageCount || 'unknown'} pages.`);
+          toast.success(`Document processed: ${processResult.textLength.toLocaleString()} characters, ${processResult.chunksCreated} chunks.`);
         }
       } else {
-        toast.success(`Document processed successfully: ${processResult.textLength} characters, ${processResult.chunksCreated} chunks from ${processResult.pageCount || 'unknown'} pages.`);
+        toast.warning(`Document processed but extraction may be incomplete: ${processResult.textLength} characters from ${processResult.pageCount || 'unknown'} pages.`);
       }
 
       return {
@@ -177,7 +182,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         summary: processResult.summary,
         textLength: processResult.textLength,
         pageCount: processResult.pageCount,
-        processor: processResult.processor || 'azure_document_intelligence',
+        processor: processResult.processor || 'azure_document_intelligence_enhanced',
         preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
       };
     } catch (error) {
@@ -189,16 +194,26 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     
-    // Validate files
+    // Enhanced validation for large documents
     const validFiles = files.filter(file => {
-      if (file.size > 20 * 1024 * 1024) { // Increased to 20MB for large PDFs
-        toast.error(`File ${file.name} is too large. Maximum size is 20MB.`);
+      const fileSizeMB = Math.round(file.size / (1024 * 1024));
+      
+      if (file.size > 100 * 1024 * 1024) { // 100MB limit
+        toast.error(`File ${file.name} is too large (${fileSizeMB}MB). Maximum size is 100MB. Consider splitting large documents.`);
         return false;
       }
       if (file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
         toast.error(`File ${file.name} is not supported. Only PDF and image files are allowed.`);
         return false;
       }
+      
+      // Warn about very large files
+      if (fileSizeMB > 50) {
+        toast.warning(`${file.name} is very large (${fileSizeMB}MB) and may take 5-10 minutes to process.`);
+      } else if (fileSizeMB > 20) {
+        toast.info(`${file.name} is large (${fileSizeMB}MB) and may take 2-5 minutes to process.`);
+      }
+      
       return true;
     });
 
@@ -212,7 +227,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
     setAttachedFiles(prev => [...prev, ...newAttachedFiles]);
 
-    // Process files with enhanced error handling
+    // Process files with enhanced error handling for large documents
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i];
       try {
@@ -221,7 +236,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           throw new Error('Authentication required');
         }
 
-        console.log(`Processing file ${i + 1}/${validFiles.length}: ${file.name} (${file.size} bytes)`);
+        const fileSizeMB = Math.round(file.size / (1024 * 1024));
+        console.log(`Processing file ${i + 1}/${validFiles.length}: ${file.name} (${fileSizeMB}MB)`);
 
         // Create document record first with temporary storage path
         const { data: document, error: docError } = await supabase
@@ -260,11 +276,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         let userFriendlyMessage = `Failed to process ${file.name}`;
         
         if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
-          userFriendlyMessage += ' (processing timeout - file may be too large)';
+          userFriendlyMessage += ' (processing timeout - document may be too large or complex)';
         } else if (errorMessage.includes('duplicate') || errorMessage.includes('Duplicate')) {
           userFriendlyMessage += ' (file already exists - please rename and try again)';
         } else if (errorMessage.includes('storage')) {
           userFriendlyMessage += ' (storage error)';
+        } else if (errorMessage.includes('Large document')) {
+          userFriendlyMessage = errorMessage; // Use the enhanced error message as-is
         }
         
         toast.error(`${userFriendlyMessage}: ${errorMessage}`);
@@ -313,20 +331,28 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   };
 
   const getFileStatusText = (attachedFile: AttachedFile) => {
+    const fileSizeMB = Math.round(attachedFile.file.size / (1024 * 1024));
+    const isLargeFile = fileSizeMB > 10;
+    
     if (attachedFile.processing) {
+      if (isLargeFile) {
+        return `Processing large document (${fileSizeMB}MB) with Azure - may take up to 10 minutes...`;
+      }
       return "Processing with Azure (may take up to 5 minutes for large files)...";
     }
     if (attachedFile.processingError) {
       return `Processing failed: ${attachedFile.processingError}`;
     }
     if (attachedFile.processed && attachedFile.pageCount && attachedFile.textLength) {
-      return `Ready - ${attachedFile.pageCount} pages, ${attachedFile.textLength.toLocaleString()} chars (Azure)`;
+      const quality = attachedFile.textLength > (attachedFile.pageCount * 200) ? 'excellent' : 
+                     attachedFile.textLength > (attachedFile.pageCount * 100) ? 'good' : 'limited';
+      return `Ready - ${attachedFile.pageCount} pages, ${attachedFile.textLength.toLocaleString()} chars (${quality} quality)`;
     }
     if (attachedFile.processed && attachedFile.textLength) {
-      return `Ready - ${attachedFile.textLength.toLocaleString()} chars (Azure)`;
+      return `Ready - ${attachedFile.textLength.toLocaleString()} chars (Azure Enhanced)`;
     }
     if (attachedFile.processed) {
-      return "Ready for analysis (Azure)";
+      return "Ready for analysis (Azure Enhanced)";
     }
     return "Uploaded";
   };

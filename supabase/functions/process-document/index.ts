@@ -90,9 +90,30 @@ serve(async (req) => {
       throw new Error('Document not found or access denied')
     }
 
-    console.log(`Found document: ${document.original_name}, type: ${document.file_type}, size: ${document.file_size} bytes`)
+    // Enhanced document size validation and user warnings
+    const fileSizeMB = Math.round(document.file_size / (1024 * 1024))
+    const estimatedPages = Math.max(1, Math.round(document.file_size / 50000)) // Rough estimate
+    
+    console.log(`Document analysis: ${document.original_name}`)
+    console.log(`- File size: ${fileSizeMB}MB (${document.file_size} bytes)`)
+    console.log(`- Estimated pages: ${estimatedPages}`)
+    console.log(`- File type: ${document.file_type}`)
 
-    // CRITICAL FIX: Validate storage path before attempting download
+    // Update processing status with size info
+    await supabaseClient
+      .from('document_uploads')
+      .update({ 
+        processing_status: 'processing',
+        metadata: {
+          ...((document.metadata as Record<string, any>) || {}),
+          file_size_mb: fileSizeMB,
+          estimated_pages: estimatedPages,
+          processing_started: new Date().toISOString()
+        }
+      })
+      .eq('id', documentId)
+
+    // Validate storage path
     if (!document.storage_path || document.storage_path === 'temp') {
       console.error('Invalid storage path:', document.storage_path)
       throw new Error(`Document has invalid storage path: ${document.storage_path || 'null'}. Upload may have failed.`)
@@ -100,7 +121,7 @@ serve(async (req) => {
 
     console.log(`Using storage path: ${document.storage_path}`)
 
-    // Download file from storage with better error handling
+    // Download file from storage with enhanced error handling
     const { data: fileData, error: downloadError } = await supabaseClient.storage
       .from('documents')
       .download(document.storage_path)
@@ -108,7 +129,6 @@ serve(async (req) => {
     if (downloadError || !fileData) {
       console.error('Storage download error:', downloadError)
       
-      // Check if file exists
       const { data: fileExists } = await supabaseClient.storage
         .from('documents')
         .list(document.storage_path.split('/').slice(0, -1).join('/'), {
@@ -122,7 +142,8 @@ serve(async (req) => {
       throw new Error(`Failed to download document: ${downloadError?.message || 'Unknown storage error'}`)
     }
 
-    console.log(`Downloaded file: ${document.original_name}, actual size: ${(await fileData.arrayBuffer()).byteLength} bytes`)
+    const actualFileSize = (await fileData.arrayBuffer()).byteLength
+    console.log(`Downloaded file: ${document.original_name}, actual size: ${actualFileSize} bytes`)
 
     let extractedText = ''
     let summary = ''
@@ -131,7 +152,7 @@ serve(async (req) => {
     
     try {
       if (document.file_type === 'application/pdf' || document.file_type.startsWith('image/')) {
-        console.log('Processing document with Azure Document Intelligence (extended timeout for large files)...')
+        console.log('Processing document with Azure Document Intelligence (optimized for large files)...')
         
         const azureEndpoint = Deno.env.get('AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT')
         const azureKey = Deno.env.get('AZURE_DOCUMENT_INTELLIGENCE_KEY')
@@ -143,7 +164,7 @@ serve(async (req) => {
         // Convert file to array buffer
         const arrayBuffer = await fileData.arrayBuffer()
         const fileSizeKB = Math.round(arrayBuffer.byteLength / 1024)
-        console.log(`File converted to array buffer: ${arrayBuffer.byteLength} bytes (${fileSizeKB} KB)`)
+        console.log(`File prepared for Azure: ${arrayBuffer.byteLength} bytes (${fileSizeKB} KB)`)
         
         // Submit document for analysis
         const analyzeUrl = `${azureEndpoint}/formrecognizer/documentModels/prebuilt-read:analyze?api-version=2023-07-31`
@@ -170,21 +191,36 @@ serve(async (req) => {
           throw new Error('No operation location returned from Azure')
         }
 
-        console.log('Document submitted to Azure, polling for results with extended timeout...')
+        console.log('Document submitted to Azure, implementing enhanced polling strategy...')
         
-        // Extended polling for large documents with progressive backoff
+        // Enhanced polling strategy for large documents
         let attempts = 0
-        const maxAttempts = 300 // 5 minutes max wait time for very large PDFs
+        const maxAttempts = 500 // Increased to 8+ minutes for very large documents
         let result: AzureAnalyzeResult | null = null
-        let waitTime = 1000 // Start with 1 second
+        let waitTime = 2000 // Start with 2 seconds for large files
+        let lastProgressUpdate = Date.now()
+        
+        // Determine polling strategy based on file size
+        const isVeryLargeFile = fileSizeMB > 50 // 50MB+
+        const isLargeFile = fileSizeMB > 10 // 10MB+
+        
+        if (isVeryLargeFile) {
+          waitTime = 5000 // 5 second intervals for very large files
+          console.log(`Very large file detected (${fileSizeMB}MB) - using extended polling strategy`)
+        } else if (isLargeFile) {
+          waitTime = 3000 // 3 second intervals for large files
+          console.log(`Large file detected (${fileSizeMB}MB) - using enhanced polling strategy`)
+        }
         
         while (attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, waitTime))
           attempts++
           
-          // Progressive backoff: increase wait time for large files
-          if (attempts > 30 && fileSizeKB > 5000) { // After 30 attempts for files > 5MB
-            waitTime = Math.min(waitTime * 1.1, 5000) // Increase wait time, max 5 seconds
+          // Progressive backoff for very large files
+          if (attempts > 60 && isVeryLargeFile) {
+            waitTime = Math.min(waitTime * 1.05, 10000) // Max 10 second intervals
+          } else if (attempts > 30 && isLargeFile) {
+            waitTime = Math.min(waitTime * 1.1, 7000) // Max 7 second intervals
           }
           
           try {
@@ -196,132 +232,201 @@ serve(async (req) => {
 
             if (!resultResponse.ok) {
               console.error(`Failed to get analysis results: ${resultResponse.status}`)
-              // Don't throw immediately, try a few more times
-              if (attempts > maxAttempts - 10) {
+              if (attempts > maxAttempts - 20) {
                 throw new Error(`Failed to get analysis results: ${resultResponse.status}`)
               }
               continue
             }
 
             result = await resultResponse.json()
-            console.log(`Analysis status: ${result.status} (attempt ${attempts}/${maxAttempts}, wait: ${Math.round(waitTime)}ms)`)
+            const elapsedTime = Math.round(attempts * waitTime / 1000)
+            
+            console.log(`Analysis status: ${result.status} (attempt ${attempts}/${maxAttempts}, elapsed: ${elapsedTime}s, wait: ${Math.round(waitTime/1000)}s)`)
+            
+            // Update processing status every 30 seconds for long operations
+            if (Date.now() - lastProgressUpdate > 30000) {
+              await supabaseClient
+                .from('document_uploads')
+                .update({ 
+                  metadata: {
+                    ...((document.metadata as Record<string, any>) || {}),
+                    processing_progress: `Azure processing: ${elapsedTime}s elapsed, status: ${result.status}`,
+                    attempts: attempts,
+                    estimated_completion: attempts < 100 ? 'Soon' : 'Processing large document...'
+                  }
+                })
+                .eq('id', documentId)
+              
+              lastProgressUpdate = Date.now()
+            }
             
             if (result.status === 'succeeded') {
-              console.log('Azure processing completed successfully!')
+              console.log(`Azure processing completed successfully after ${elapsedTime}s!`)
               break
             } else if (result.status === 'failed') {
               throw new Error('Azure document analysis failed')
             }
             
-            // Log progress for long-running operations
-            if (attempts % 30 === 0) {
-              console.log(`Still processing... ${attempts} attempts, ${Math.round(attempts * waitTime / 1000)}s elapsed`)
+            // Enhanced progress logging for long operations
+            if (attempts % 20 === 0 || (attempts % 10 === 0 && isVeryLargeFile)) {
+              console.log(`Still processing large document... ${attempts} attempts, ${elapsedTime}s elapsed`)
+              console.log(`Current status: ${result.status}, File size: ${fileSizeMB}MB`)
             }
+            
           } catch (fetchError) {
             console.error(`Error polling Azure results (attempt ${attempts}):`, fetchError)
-            if (attempts > maxAttempts - 5) {
+            if (attempts > maxAttempts - 10) {
               throw fetchError
             }
           }
         }
 
         if (!result || result.status !== 'succeeded' || !result.analyzeResult) {
-          throw new Error(`Document analysis did not complete successfully after ${attempts} attempts (${Math.round(attempts * waitTime / 1000)}s)`)
+          const elapsedTime = Math.round(attempts * waitTime / 1000)
+          throw new Error(`Document analysis timeout after ${attempts} attempts (${elapsedTime}s). Large documents may require longer processing time.`)
         }
 
-        // Extract text and page information with comprehensive validation
+        // Extract text and page information with enhanced validation
         extractedText = result.analyzeResult.content || ''
         pageCount = result.analyzeResult.pages?.length || 1
         
-        console.log(`Azure extraction complete: ${extractedText.length} characters, ${pageCount} pages`)
-        console.log(`Pages array length: ${result.analyzeResult.pages?.length || 0}`)
-        console.log(`Processing took ${attempts} attempts over ${Math.round(attempts * waitTime / 1000)} seconds`)
+        const elapsedTime = Math.round(attempts * waitTime / 1000)
+        console.log(`Azure extraction completed: ${extractedText.length} characters, ${pageCount} pages`)
+        console.log(`Processing statistics: ${attempts} attempts over ${elapsedTime} seconds`)
+        console.log(`Average processing time per page: ${Math.round(elapsedTime / pageCount)}s`)
         
-        // Enhanced validation for extraction quality based on file size
-        const expectedMinChars = Math.max(50, Math.min(pageCount * 200, fileSizeKB / 10)) // Adaptive based on file size
+        // Enhanced validation for large documents
+        const expectedMinChars = Math.max(100, Math.min(pageCount * 500, fileSizeMB * 1000)) // More conservative estimates
+        const charsPerPage = Math.round(extractedText.length / pageCount)
         
+        console.log(`Quality validation:`, {
+          extractedLength: extractedText.length,
+          expectedMinimum: expectedMinChars,
+          pageCount: pageCount,
+          fileSizeMB: fileSizeMB,
+          charsPerPage: charsPerPage,
+          processingTimeSeconds: elapsedTime,
+          qualityRatio: extractedText.length / expectedMinChars
+        })
+
         if (extractedText.length < expectedMinChars) {
-          console.warn(`Potential extraction quality issue:`, {
-            extractedLength: extractedText.length,
-            expectedMinimum: expectedMinChars,
+          console.warn(`Potential extraction quality issue for large document:`, {
+            actualChars: extractedText.length,
+            expectedMinChars: expectedMinChars,
             pageCount: pageCount,
-            fileSizeKB: fileSizeKB,
-            averageCharsPerPage: Math.round(extractedText.length / pageCount),
-            processingTime: `${Math.round(attempts * waitTime / 1000)}s`
-          });
+            averageCharsPerPage: charsPerPage
+          })
         }
 
-        if (extractedText.length < 500) {
-          console.warn('Very low text extraction - document may be image-based, corrupted, or processing incomplete')
-          summary = `Document "${document.original_name}" processed with limited text extraction (${extractedText.length} chars from ${pageCount} pages). Document may contain primarily images, have extraction issues, or processing may be incomplete.`
-        } else {
-          // Create enhanced semantic chunks that preserve all content
-          chunks = createComprehensiveSemanticChunks(extractedText, documentId, pageCount, fileSizeKB)
-          console.log(`Created ${chunks.length} comprehensive chunks from ${pageCount} pages`)
+        // Create enhanced semantic chunks for large documents
+        if (extractedText.length > 500) {
+          chunks = createAdvancedSemanticChunks(extractedText, documentId, pageCount, fileSizeMB)
+          console.log(`Created ${chunks.length} advanced chunks for large document`)
           
           // Validate chunk coverage
           const totalChunkChars = chunks.reduce((sum, chunk) => sum + chunk.content.length, 0)
           const coverageRatio = totalChunkChars / extractedText.length
           
-          console.log(`Chunk coverage validation:`, {
+          console.log(`Large document chunk validation:`, {
             originalTextLength: extractedText.length,
             totalChunkLength: totalChunkChars,
             coverageRatio: coverageRatio,
             chunksCreated: chunks.length,
-            avgChunkSize: Math.round(totalChunkChars / chunks.length)
+            avgChunkSize: Math.round(totalChunkChars / chunks.length),
+            processingTime: elapsedTime
           })
           
-          if (coverageRatio < 0.85) {
-            console.warn(`Lower than expected chunk coverage: ${(coverageRatio * 100).toFixed(1)}%`)
+          if (coverageRatio < 0.90) {
+            console.warn(`Lower chunk coverage for large document: ${(coverageRatio * 100).toFixed(1)}%`)
           }
           
-          // Generate comprehensive summary with file size context
+          // Generate comprehensive summary
           const words = extractedText.trim().split(/\s+/)
-          const previewWords = Math.min(500, Math.max(200, words.length * 0.1)) // Adaptive preview length
+          const previewWords = Math.min(300, Math.max(150, words.length * 0.05))
           const firstWords = words.slice(0, previewWords).join(' ')
-          summary = `Document "${document.original_name}" (${pageCount} pages, ${fileSizeKB}KB, ${extractedText.length.toLocaleString()} chars) successfully processed with Azure Document Intelligence. ${chunks.length} content chunks created. Processing time: ${Math.round(attempts * waitTime / 1000)}s. Preview: ${firstWords}${words.length > previewWords ? '...' : ''}`
+          
+          summary = `Large document "${document.original_name}" (${pageCount} pages, ${fileSizeMB}MB, ${extractedText.length.toLocaleString()} characters) successfully processed with Azure Document Intelligence. Created ${chunks.length} content chunks with ${Math.round(coverageRatio * 100)}% coverage. Processing time: ${elapsedTime}s (${Math.round(elapsedTime/60)}min). Quality: ${charsPerPage} chars/page. Preview: ${firstWords}${words.length > previewWords ? '...' : ''}`
+        } else {
+          console.warn('Low text extraction from large document - may contain primarily images or have processing issues')
+          summary = `Large document "${document.original_name}" (${pageCount} pages, ${fileSizeMB}MB) processed with limited text extraction (${extractedText.length} chars). Processing time: ${elapsedTime}s. Document may contain primarily images or require manual review.`
         }
 
       } else {
-        // Handle unsupported file types
-        console.log('Processing non-supported document type')
+        console.log('Processing non-PDF/image document type')
         extractedText = `Unsupported document type: ${document.original_name}`
         summary = `Document "${document.original_name}" uploaded but text extraction not supported for this file type.`
       }
 
     } catch (extractionError) {
-      console.error('Azure document processing error:', extractionError)
+      console.error('Enhanced Azure document processing error:', extractionError)
       
-      // Update document status to failed
+      // Enhanced error reporting
+      const errorDetails = {
+        error: extractionError.message,
+        document_size_mb: fileSizeMB,
+        estimated_pages: estimatedPages,
+        processing_time: Date.now(),
+        error_type: extractionError.message.includes('timeout') ? 'timeout' : 
+                   extractionError.message.includes('Azure') ? 'azure_api' : 'unknown'
+      }
+      
       await supabaseClient
         .from('document_uploads')
         .update({ 
           processing_status: 'failed',
-          processing_error: extractionError.message
+          processing_error: extractionError.message,
+          metadata: {
+            ...((document.metadata as Record<string, any>) || {}),
+            ...errorDetails
+          }
         })
         .eq('id', documentId)
       
-      throw new Error(`Failed to process document with Azure: ${extractionError.message}`)
+      throw new Error(`Failed to process large document: ${extractionError.message}`)
     }
 
     // Store chunks in database if we have any
     if (chunks.length > 0) {
-      console.log(`Storing ${chunks.length} chunks in database...`)
-      const { error: chunksError } = await supabaseClient
-        .from('document_chunks')
-        .insert(chunks)
+      console.log(`Storing ${chunks.length} chunks for large document...`)
+      
+      // Store chunks in batches for very large documents
+      const batchSize = 50
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize)
+        const { error: chunksError } = await supabaseClient
+          .from('document_chunks')
+          .insert(batch)
 
-      if (chunksError) {
-        console.error('Error storing chunks:', chunksError)
-        throw chunksError
+        if (chunksError) {
+          console.error(`Error storing chunk batch ${i/batchSize + 1}:`, chunksError)
+          throw chunksError
+        }
+        
+        console.log(`Stored chunk batch ${i/batchSize + 1}/${Math.ceil(chunks.length/batchSize)} (${batch.length} chunks)`)
       }
-      console.log(`Successfully stored ${chunks.length} chunks`)
+      
+      console.log(`Successfully stored all ${chunks.length} chunks in ${Math.ceil(chunks.length/batchSize)} batches`)
     }
 
-    // Update document with extracted text and processing results
-    const truncatedText = extractedText.length > 100000 ? 
-      extractedText.substring(0, 100000) + '...[truncated for storage]' : 
-      extractedText;
+    // Update document with final results
+    const truncatedText = extractedText.length > 200000 ? 
+      extractedText.substring(0, 200000) + '...[truncated for storage - full text available in chunks]' : 
+      extractedText
+
+    const finalMetadata = {
+      ...((document.metadata as Record<string, any>) || {}),
+      page_count: pageCount,
+      text_length: extractedText.length,
+      chunk_count: chunks.length,
+      file_size_mb: fileSizeMB,
+      processing_completed: new Date().toISOString(),
+      extraction_quality: extractedText.length > (pageCount * 200) ? 'excellent' : 
+                         extractedText.length > (pageCount * 100) ? 'good' : 'limited',
+      processor: 'azure_document_intelligence_enhanced',
+      chars_per_page: pageCount > 0 ? Math.round(extractedText.length / pageCount) : 0,
+      processing_success: true,
+      large_document_processing: fileSizeMB > 10
+    }
 
     const { error: updateError } = await supabaseClient
       .from('document_uploads')
@@ -329,19 +434,7 @@ serve(async (req) => {
         extracted_text: truncatedText,
         summary,
         processing_status: 'completed',
-        metadata: {
-          ...((document.metadata as Record<string, any>) || {}),
-          page_count: pageCount,
-          text_length: extractedText.length,
-          chunk_count: chunks.length,
-          processing_timestamp: new Date().toISOString(),
-          extraction_quality: extractedText.length > 500 ? 'good' : 'limited',
-          processor: 'azure_document_intelligence',
-          chars_per_page: pageCount > 0 ? Math.round(extractedText.length / pageCount) : 0,
-          coverage_validated: true,
-          file_size_kb: Math.round(document.file_size / 1024),
-          processing_time_seconds: Math.round(Date.now() / 1000) //approx
-        }
+        metadata: finalMetadata
       })
       .eq('id', documentId)
 
@@ -350,28 +443,35 @@ serve(async (req) => {
       throw updateError
     }
 
-    console.log(`Document ${documentId} processed successfully - ${extractedText.length} chars, ${chunks.length} chunks, ${pageCount} pages`)
+    console.log(`Large document ${documentId} processed successfully:`)
+    console.log(`- Text: ${extractedText.length} chars`)
+    console.log(`- Chunks: ${chunks.length}`)
+    console.log(`- Pages: ${pageCount}`)
+    console.log(`- Size: ${fileSizeMB}MB`)
 
     return new Response(
       JSON.stringify({
         success: true,
         documentId,
         summary,
-        extractedText: extractedText.substring(0, 1000) + (extractedText.length > 1000 ? '...' : ''),
+        extractedText: extractedText.substring(0, 2000) + (extractedText.length > 2000 ? '...' : ''),
         chunksCreated: chunks.length,
         pageCount,
         textLength: extractedText.length,
-        processor: 'azure_document_intelligence',
-        quality: extractedText.length > 500 ? 'good' : 'limited'
+        fileSizeMB,
+        processor: 'azure_document_intelligence_enhanced',
+        quality: extractedText.length > (pageCount * 200) ? 'excellent' : 
+                extractedText.length > (pageCount * 100) ? 'good' : 'limited',
+        processingTime: 'Large document processing completed'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
-    console.error('=== AZURE DOCUMENT PROCESSING ERROR ===')
-    console.error('Error:', error)
+    console.error('=== ENHANCED AZURE DOCUMENT PROCESSING ERROR ===')
+    console.error('Error details:', error)
     
-    // Try to update document status to failed
+    // Enhanced error handling and reporting
     try {
       const supabaseClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
@@ -385,7 +485,12 @@ serve(async (req) => {
           .from('document_uploads')
           .update({ 
             processing_status: 'failed',
-            processing_error: error.message
+            processing_error: error.message,
+            metadata: {
+              error_timestamp: new Date().toISOString(),
+              error_details: error.stack?.substring(0, 1000),
+              large_document_error: true
+            }
           })
           .eq('id', documentId)
       }
@@ -396,33 +501,57 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: error.stack
+        details: error.stack,
+        isLargeDocumentError: true,
+        suggestion: 'Large documents may require longer processing time. Please try again or contact support for documents over 100MB.'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
 
-// Enhanced comprehensive semantic chunking function for large documents
-function createComprehensiveSemanticChunks(text: string, documentId: string, pageCount: number, fileSizeKB?: number) {
+// Enhanced semantic chunking function optimized for large documents
+function createAdvancedSemanticChunks(text: string, documentId: string, pageCount: number, fileSizeMB?: number) {
   const chunks = []
   
-  // Adaptive chunk sizes based on document size
-  const isLargeDoc = (fileSizeKB && fileSizeKB > 5000) || pageCount > 50
-  const targetChunkSize = isLargeDoc ? 1200 : 800   // Larger chunks for large docs
-  const maxChunkSize = isLargeDoc ? 1800 : 1200     // Higher max for large docs
-  const overlapSize = isLargeDoc ? 150 : 100        // More overlap for large docs
+  // Adaptive strategies based on document size
+  const isVeryLargeDoc = (fileSizeMB && fileSizeMB > 50) || pageCount > 100
+  const isLargeDoc = (fileSizeMB && fileSizeMB > 10) || pageCount > 25
   
-  console.log(`Starting enhanced chunking for ${isLargeDoc ? 'large' : 'normal'} document: ${text.length} chars, target: ${targetChunkSize} words`)
+  // Optimized chunk sizes for large documents
+  let targetChunkSize = 800  // Default
+  let maxChunkSize = 1200    // Default
+  let overlapSize = 100      // Default
   
-  // Split text into sentences for better boundary detection
-  const sentences = text.split(/[.!?]+\s+/).filter(s => s.trim().length > 0)
-  console.log(`Found ${sentences.length} sentences to process`)
+  if (isVeryLargeDoc) {
+    targetChunkSize = 1500   // Larger chunks for very large docs
+    maxChunkSize = 2000      // Higher max
+    overlapSize = 200        // More overlap
+  } else if (isLargeDoc) {
+    targetChunkSize = 1200   // Larger chunks for large docs  
+    maxChunkSize = 1600      // Higher max
+    overlapSize = 150        // More overlap
+  }
+  
+  console.log(`Advanced chunking for ${isVeryLargeDoc ? 'very large' : isLargeDoc ? 'large' : 'normal'} document:`)
+  console.log(`- Text length: ${text.length} chars`)
+  console.log(`- Target chunk: ${targetChunkSize} words`)
+  console.log(`- Max chunk: ${maxChunkSize} words`)
+  console.log(`- Overlap: ${overlapSize} words`)
+  
+  // Enhanced sentence splitting for better accuracy
+  const sentences = text
+    .split(/[.!?]+\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 10) // Filter out very short fragments
+  
+  console.log(`Found ${sentences.length} sentences for advanced processing`)
   
   let currentChunk = ''
   let currentWordCount = 0
   let chunkIndex = 0
   let processedSentences = 0
+  let totalWordsProcessed = 0
   
   for (let i = 0; i < sentences.length; i++) {
     const sentence = sentences[i].trim()
@@ -441,21 +570,26 @@ function createComprehensiveSemanticChunks(text: string, documentId: string, pag
           content: currentChunk.trim(),
           word_count: currentWordCount,
           metadata: {
-            start_sentence: processedSentences - Math.floor(currentWordCount / 12),
+            start_sentence: Math.max(0, processedSentences - Math.floor(currentWordCount / 15)),
             end_sentence: processedSentences,
-            chunk_type: 'enhanced_semantic',
+            chunk_type: 'advanced_semantic_large_doc',
             page_count: pageCount,
             overlap_with_next: overlapSize,
-            processing_method: 'adaptive_sentence_based',
+            processing_method: 'enhanced_sentence_based',
             is_large_document: isLargeDoc,
-            document_size_kb: fileSizeKB
+            is_very_large_document: isVeryLargeDoc,
+            document_size_mb: fileSizeMB,
+            quality_score: Math.min(1.0, currentWordCount / targetChunkSize)
           }
         })
         
-        console.log(`Created chunk ${chunkIndex - 1}: ${currentWordCount} words`)
+        totalWordsProcessed += currentWordCount
+        if (chunkIndex % 10 === 0 || isVeryLargeDoc) {
+          console.log(`Created chunk ${chunkIndex - 1}: ${currentWordCount} words (${totalWordsProcessed} total)`)
+        }
       }
       
-      // Start new chunk with overlap from previous chunk
+      // Start new chunk with enhanced overlap
       const overlapText = getLastNWords(currentChunk, overlapSize)
       currentChunk = overlapText ? overlapText + ' ' + sentence : sentence
       currentWordCount = (overlapText ? estimateWordCount(overlapText) : 0) + sentenceWordCount
@@ -471,7 +605,7 @@ function createComprehensiveSemanticChunks(text: string, documentId: string, pag
     
     processedSentences++
     
-    // If current chunk reaches target size, finalize it
+    // Finalize chunk when reaching target size (but not at the very end)
     if (currentWordCount >= targetChunkSize && i < sentences.length - 1) {
       if (currentChunk.trim()) {
         chunks.push({
@@ -480,24 +614,34 @@ function createComprehensiveSemanticChunks(text: string, documentId: string, pag
           content: currentChunk.trim(),
           word_count: currentWordCount,
           metadata: {
-            start_sentence: processedSentences - Math.floor(currentWordCount / 12),
+            start_sentence: Math.max(0, processedSentences - Math.floor(currentWordCount / 15)),
             end_sentence: processedSentences,
-            chunk_type: 'enhanced_semantic',
+            chunk_type: 'advanced_semantic_large_doc',
             page_count: pageCount,
             overlap_with_next: overlapSize,
-            processing_method: 'adaptive_sentence_based',
+            processing_method: 'enhanced_sentence_based',
             is_large_document: isLargeDoc,
-            document_size_kb: fileSizeKB
+            is_very_large_document: isVeryLargeDoc,
+            document_size_mb: fileSizeMB,
+            quality_score: Math.min(1.0, currentWordCount / targetChunkSize)
           }
         })
         
-        console.log(`Created chunk ${chunkIndex - 1}: ${currentWordCount} words`)
+        totalWordsProcessed += currentWordCount
+        if (chunkIndex % 10 === 0 || isVeryLargeDoc) {
+          console.log(`Created chunk ${chunkIndex - 1}: ${currentWordCount} words (${totalWordsProcessed} total)`)
+        }
       }
       
       // Prepare overlap for next chunk
       const overlapText = getLastNWords(currentChunk, overlapSize)
       currentChunk = overlapText || ''
       currentWordCount = overlapText ? estimateWordCount(overlapText) : 0
+    }
+    
+    // Progress logging for very large documents
+    if (isVeryLargeDoc && i % 1000 === 0 && i > 0) {
+      console.log(`Advanced chunking progress: ${i}/${sentences.length} sentences, ${chunkIndex} chunks created`)
     }
   }
   
@@ -509,17 +653,20 @@ function createComprehensiveSemanticChunks(text: string, documentId: string, pag
       content: currentChunk.trim(),
       word_count: currentWordCount,
       metadata: {
-        start_sentence: processedSentences - Math.floor(currentWordCount / 12),
+        start_sentence: Math.max(0, processedSentences - Math.floor(currentWordCount / 15)),
         end_sentence: processedSentences,
-        chunk_type: 'enhanced_semantic',
+        chunk_type: 'advanced_semantic_large_doc',
         page_count: pageCount,
         is_final: true,
-        processing_method: 'adaptive_sentence_based',
+        processing_method: 'enhanced_sentence_based',
         is_large_document: isLargeDoc,
-        document_size_kb: fileSizeKB
+        is_very_large_document: isVeryLargeDoc,
+        document_size_mb: fileSizeMB,
+        quality_score: Math.min(1.0, currentWordCount / targetChunkSize)
       }
     })
     
+    totalWordsProcessed += currentWordCount
     console.log(`Created final chunk ${chunkIndex - 1}: ${currentWordCount} words`)
   }
   
@@ -528,11 +675,17 @@ function createComprehensiveSemanticChunks(text: string, documentId: string, pag
   const originalWords = text.split(/\s+/).filter(w => w.length > 0).length
   const chunkWords = totalChunkContent.split(/\s+/).filter(w => w.length > 0).length
   const coverageRatio = chunkWords / originalWords
+  const avgChunkSize = Math.round(chunkWords / chunks.length)
   
-  console.log(`Enhanced chunking validation: Original ${originalWords} words, Chunks contain ${chunkWords} words (${Math.round(coverageRatio * 100)}% coverage), ${chunks.length} chunks created`)
+  console.log(`Advanced chunking completed for ${isVeryLargeDoc ? 'very large' : 'large'} document:`)
+  console.log(`- Original: ${originalWords} words`)
+  console.log(`- Chunks: ${chunkWords} words in ${chunks.length} chunks`)
+  console.log(`- Coverage: ${Math.round(coverageRatio * 100)}%`)
+  console.log(`- Average chunk size: ${avgChunkSize} words`)
+  console.log(`- Target was: ${targetChunkSize} words`)
   
-  if (coverageRatio < 0.90) {
-    console.warn(`Coverage below 90% for ${isLargeDoc ? 'large' : 'normal'} document: ${Math.round(coverageRatio * 100)}%`)
+  if (coverageRatio < 0.92) {
+    console.warn(`Coverage below optimal for large document: ${Math.round(coverageRatio * 100)}%`)
   }
   
   return chunks
@@ -545,7 +698,6 @@ function getLastNWords(text: string, n: number): string {
   return words.slice(-n).join(' ')
 }
 
-// Helper function to estimate word count
 function estimateWordCount(text: string): number {
   return text.trim().split(/\s+/).filter(w => w.length > 0).length
 }

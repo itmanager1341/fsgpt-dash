@@ -73,15 +73,21 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
     return null;
   };
 
-  // Generate unique keys that prioritize database IDs over local IDs
+  // Enhanced unique key generation to prevent duplicates
   const generateMessageKey = (message: MessageWithLoading, index: number) => {
+    // Create a stable hash from content and timestamp for better uniqueness
+    const contentHash = message.content.substring(0, 50).replace(/\s+/g, '');
+    const timestamp = new Date(message.created_at).getTime();
+    
+    // Prioritize database IDs over local IDs, but ensure uniqueness
     if (message.id && !message.id.startsWith('temp-')) {
-      return `db-${message.id}`;
+      return `db-${message.id}-${message.role}`;
     }
     if (message.localId) {
-      return `local-${message.localId}`;
+      return `local-${message.localId}-${timestamp}`;
     }
-    return `fallback-${message.role}-${index}-${message.created_at}`;
+    // Enhanced fallback with content hash and timestamp
+    return `fallback-${message.role}-${index}-${timestamp}-${contentHash}`;
   };
 
   return (

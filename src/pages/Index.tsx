@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react';
 import { useAnimateIn } from '@/lib/animations';
 import { HeroSection } from '@/components/landing/HeroSection';
 import { ManageSection } from '@/components/landing/ManageSection';
-import { DesignSection } from '@/components/landing/DesignSection';
-import { DeploySection } from '@/components/landing/DeploySection';
-import { TestimonialsSection } from '@/components/landing/TestimonialsSection';
+import { DocumentProcessingSection } from '@/components/landing/DocumentProcessingSection';
+import { SecureCollaborationSection } from '@/components/landing/SecureCollaborationSection';
+import { FSGSuccessSection } from '@/components/landing/FSGSuccessSection';
 import { CallToAction } from '@/components/landing/CallToAction';
 import { LoadingScreen } from '@/components/landing/LoadingScreen';
 import UseCasesSection from '@/components/landing/UseCasesSection';
@@ -14,10 +14,10 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const showHero = useAnimateIn(false, 300);
   const showManage = useAnimateIn(false, 600);
-  const showDesign = useAnimateIn(false, 900);
-  const showDeploy = useAnimateIn(false, 1200);
+  const showDocumentProcessing = useAnimateIn(false, 900);
+  const showSecureCollaboration = useAnimateIn(false, 1200);
   const showUseCases = useAnimateIn(false, 1500);
-  const showTestimonials = useAnimateIn(false, 1800);
+  const showFSGSuccess = useAnimateIn(false, 1800);
   const showCallToAction = useAnimateIn(false, 2100);
   
   useEffect(() => {
@@ -45,20 +45,20 @@ const Index = () => {
           {/* Hero Section */}
           <HeroSection showTitle={showHero} />
           
-          {/* Manage Section */}
+          {/* Core Capabilities Section */}
           <ManageSection show={showManage} />
           
-          {/* Design Section */}
-          <DesignSection show={showDesign} />
+          {/* Document Processing Section */}
+          <DocumentProcessingSection show={showDocumentProcessing} />
           
-          {/* Deploy Section */}
-          <DeploySection show={showDeploy} />
+          {/* Secure Collaboration Section */}
+          <SecureCollaborationSection show={showSecureCollaboration} />
           
           {/* Use Cases Section */}
           <UseCasesSection show={showUseCases} />
           
-          {/* Testimonials Section */}
-          <TestimonialsSection showTestimonials={showTestimonials} />
+          {/* FSG Success Stories Section */}
+          <FSGSuccessSection show={showFSGSuccess} />
           
           {/* Call to Action */}
           <CallToAction show={showCallToAction} />

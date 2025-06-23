@@ -27,10 +27,10 @@ export const useChat = () => {
     }
   }, [activeSession?.conversation.id]);
 
-  const createConversation = useCallback(async (title?: string, initialMessage?: string) => {
+  const createConversation = useCallback(async (title?: string, initialMessage?: string, projectId?: string) => {
     try {
       setIsLoading(true);
-      console.log('Creating conversation with title:', title, 'initialMessage:', initialMessage);
+      console.log('Creating conversation with title:', title, 'initialMessage:', initialMessage, 'projectId:', projectId);
       
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -47,7 +47,10 @@ export const useChat = () => {
 
       console.log('Invoking create-conversation function...');
       const response = await supabase.functions.invoke('create-conversation', {
-        body: { title: conversationTitle },
+        body: { 
+          title: conversationTitle,
+          projectId // Pass projectId to the function
+        },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },

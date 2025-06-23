@@ -422,6 +422,7 @@ export type Database = {
           id: string
           metadata: Json | null
           model_preference: string | null
+          project_id: string | null
           provider_preference: string | null
           status: string
           title: string
@@ -434,6 +435,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           model_preference?: string | null
+          project_id?: string | null
           provider_preference?: string | null
           status?: string
           title?: string
@@ -446,6 +448,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           model_preference?: string | null
+          project_id?: string | null
           provider_preference?: string | null
           status?: string
           title?: string
@@ -454,6 +457,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "conversations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversations_user_id_fkey"
             columns: ["user_id"]
@@ -1356,6 +1366,53 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_archived: boolean
+          name: string
+          parent_project_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_archived?: boolean
+          name: string
+          parent_project_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_archived?: boolean
+          name?: string
+          parent_project_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]

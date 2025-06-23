@@ -6,10 +6,9 @@ import { useSidebar } from '@/hooks/useSidebar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { MessageSquare, Search, Menu, X } from 'lucide-react';
-import ConversationSidebar from './ConversationSidebar';
+import ProjectSidebar from './ProjectSidebar';
 import MessageThread from './MessageThread';
-import ChatInputArea from './ChatInputArea';
-import ModelSelector from './ModelSelector';
+import InlineChatInput from './InlineChatInput';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
@@ -59,9 +58,15 @@ const ChatInterface: React.FC = () => {
     }
   }, [modelAccess, selectedModel]);
 
-  const handleNewConversation = async () => {
+  const handleNewConversation = async (projectId?: string) => {
     const title = chatMode === 'search' ? 'Search Session' : undefined;
-    await createConversation(title);
+    const newSession = await createConversation(title);
+    
+    // If projectId is provided and we have a new session, assign it to the project
+    if (projectId && newSession) {
+      // This would be handled in the useChat hook with project support
+      console.log('Would assign conversation to project:', projectId);
+    }
   };
 
   const handleSelectConversation = (conversationId: string) => {
@@ -99,8 +104,8 @@ const ChatInterface: React.FC = () => {
 
   const getPlaceholder = () => {
     return chatMode === 'search' 
-      ? 'Search your knowledge base...' 
-      : 'Type your message...';
+      ? 'Search your knowledge base... (try @gpt4 or /search)' 
+      : 'Type your message... (try @gpt4 for GPT-4.1 or /analyze)';
   };
 
   // Show loading state while API access data is being fetched
@@ -126,7 +131,7 @@ const ChatInterface: React.FC = () => {
           "h-full w-80 transition-opacity duration-300",
           isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100"
         )}>
-          <ConversationSidebar
+          <ProjectSidebar
             sessions={sessions}
             activeSession={activeSession}
             onNewConversation={handleNewConversation}
@@ -139,7 +144,7 @@ const ChatInterface: React.FC = () => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header with Sidebar Toggle, Mode Toggle and Model Selector */}
+        {/* Header with Sidebar Toggle and Mode Toggle */}
         <div className="border-b bg-background p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -173,12 +178,10 @@ const ChatInterface: React.FC = () => {
               </Tabs>
             </div>
             
-            <ModelSelector
-              modelAccess={modelAccess}
-              selectedModel={selectedModel}
-              selectedProvider={selectedProvider}
-              onModelSelect={handleModelSelect}
-            />
+            {/* Mode info */}
+            <div className="text-sm text-muted-foreground">
+              {chatMode === 'search' ? 'Knowledge Search Mode' : 'AI Chat Mode'}
+            </div>
           </div>
         </div>
 
@@ -187,16 +190,16 @@ const ChatInterface: React.FC = () => {
           <MessageThread session={activeSession} />
         </div>
 
-        <Separator />
-
-        {/* Input Area */}
-        <div className="border-t bg-background">
-          <ChatInputArea
-            onSendMessage={handleSendMessage}
-            disabled={isLoading}
-            placeholder={getPlaceholder()}
-          />
-        </div>
+        {/* Enhanced Input Area */}
+        <InlineChatInput
+          onSendMessage={handleSendMessage}
+          disabled={isLoading}
+          placeholder={getPlaceholder()}
+          modelAccess={modelAccess}
+          selectedModel={selectedModel}
+          selectedProvider={selectedProvider}
+          onModelSelect={handleModelSelect}
+        />
       </div>
     </div>
   );

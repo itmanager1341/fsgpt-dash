@@ -1,4 +1,3 @@
-
 // Enhanced chat types that map to our Supabase tables
 export interface Conversation {
   id: string;
@@ -9,6 +8,7 @@ export interface Conversation {
   provider_preference: string;
   status: 'active' | 'archived' | 'deleted';
   metadata: Record<string, any>;
+  project_id?: string; // Added project_id field
   created_at: string;
   updated_at: string;
 }

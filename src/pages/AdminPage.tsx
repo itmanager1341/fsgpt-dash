@@ -1,11 +1,11 @@
 
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Activity, Settings, BarChart3 } from 'lucide-react';
 import UserManagement from '@/components/admin/UserManagement';
 import UsageAnalytics from '@/components/admin/UsageAnalytics';
 import AdminDashboard from '@/components/admin/AdminDashboard';
+import ModelManagementSettings from '@/components/admin/ModelManagementSettings';
 
 const AdminPage: React.FC = () => {
   return (
@@ -48,15 +48,7 @@ const AdminPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>System Settings</CardTitle>
-              <CardDescription>Configure system-wide settings and preferences</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Additional system settings coming soon...</p>
-            </CardContent>
-          </Card>
+          <ModelManagementSettings />
         </TabsContent>
       </Tabs>
     </div>

@@ -16,6 +16,13 @@ interface SendMessageRequest {
   documentIds?: string[];
 }
 
+interface ModelTokenConfig {
+  recommended_max_tokens: number;
+  recommended_context_tokens: number;
+  optimal_temperature: number;
+  provider_specific_params: any;
+}
+
 // Helper function to validate and fix message sequence for Perplexity
 function prepareMessagesForPerplexity(messages: Array<{role: string, content: string}>) {
   console.log('Original messages for Perplexity:', messages.length);
@@ -137,6 +144,29 @@ serve(async (req) => {
 
     console.log(`Processing message for conversation ${conversationId} with ${provider}:${model}`)
     console.log(`Document IDs provided: ${documentIds.length}`)
+
+    // Fetch model-specific token configuration
+    let modelConfig: ModelTokenConfig | null = null;
+    try {
+      const { data: configData, error: configError } = await supabaseClient
+        .rpc('get_model_token_config', {
+          provider_param: provider,
+          model_param: model
+        });
+
+      if (!configError && configData && configData.length > 0) {
+        modelConfig = configData[0];
+        console.log('Model configuration loaded:', {
+          maxTokens: modelConfig.recommended_max_tokens,
+          temperature: modelConfig.optimal_temperature,
+          providerParams: Object.keys(modelConfig.provider_specific_params || {}).length
+        });
+      } else {
+        console.log('No model configuration found, using defaults');
+      }
+    } catch (error) {
+      console.warn('Failed to fetch model configuration:', error);
+    }
 
     // Enhanced document context retrieval using provided document IDs
     let documentContext = ''
@@ -310,7 +340,45 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
       }
     }
 
+    // Determine optimal parameters from model configuration
+    const maxTokens = modelConfig?.recommended_max_tokens || 4000;
+    const temperature = modelConfig?.optimal_temperature || 0.7;
+    const providerParams = modelConfig?.provider_specific_params || {};
+
     console.log(`Calling ${provider} API with ${finalMessages.length} messages (including ${documentContext.length} chars of document context)`);
+    console.log(`Using optimized settings: maxTokens=${maxTokens}, temperature=${temperature}`);
+
+    // Build request body with provider-specific optimizations
+    const requestBody: any = {
+      model,
+      messages: finalMessages,
+      max_tokens: maxTokens,
+      temperature: Number(temperature),
+      stream,
+    };
+
+    // Add provider-specific parameters
+    if (provider === 'perplexity' && providerParams) {
+      // Apply Perplexity-specific parameters
+      if (providerParams.return_images !== undefined) {
+        requestBody.return_images = providerParams.return_images;
+      }
+      if (providerParams.return_related_questions !== undefined) {
+        requestBody.return_related_questions = providerParams.return_related_questions;
+      }
+      if (providerParams.search_recency_filter) {
+        requestBody.search_recency_filter = providerParams.search_recency_filter;
+      }
+      if (providerParams.frequency_penalty !== undefined) {
+        requestBody.frequency_penalty = providerParams.frequency_penalty;
+      }
+      if (providerParams.presence_penalty !== undefined) {
+        requestBody.presence_penalty = providerParams.presence_penalty;
+      }
+      if (providerParams.search_domain_filter && Array.isArray(providerParams.search_domain_filter)) {
+        requestBody.search_domain_filter = providerParams.search_domain_filter;
+      }
+    }
 
     // Call LLM API
     const llmResponse = await fetch(apiUrl, {
@@ -319,13 +387,7 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model,
-        messages: finalMessages,
-        max_tokens: 4000, // Increased for comprehensive responses
-        temperature: 0.7,
-        stream,
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!llmResponse.ok) {
@@ -451,7 +513,7 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
       .update({ updated_at: new Date().toISOString() })
       .eq('id', conversationId)
 
-    console.log(`Message processed successfully with document context. Cost: $${cost.toFixed(4)}`)
+    console.log(`Message processed successfully with optimized token settings. Cost: $${cost.toFixed(4)}`)
 
     return new Response(
       JSON.stringify({

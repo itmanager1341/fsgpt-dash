@@ -1109,11 +1109,15 @@ export type Database = {
           last_pricing_update: string | null
           max_tokens: number | null
           model_name: string
+          optimal_temperature: number | null
           performance_notes: string | null
           pricing_source: string | null
           primary_use_cases: Json | null
           provider: string
+          provider_specific_params: Json | null
+          recommended_context_tokens: number | null
           recommended_for: string | null
+          recommended_max_tokens: number | null
           supports_streaming: boolean | null
           updated_at: string
         }
@@ -1134,11 +1138,15 @@ export type Database = {
           last_pricing_update?: string | null
           max_tokens?: number | null
           model_name: string
+          optimal_temperature?: number | null
           performance_notes?: string | null
           pricing_source?: string | null
           primary_use_cases?: Json | null
           provider: string
+          provider_specific_params?: Json | null
+          recommended_context_tokens?: number | null
           recommended_for?: string | null
+          recommended_max_tokens?: number | null
           supports_streaming?: boolean | null
           updated_at?: string
         }
@@ -1159,11 +1167,15 @@ export type Database = {
           last_pricing_update?: string | null
           max_tokens?: number | null
           model_name?: string
+          optimal_temperature?: number | null
           performance_notes?: string | null
           pricing_source?: string | null
           primary_use_cases?: Json | null
           provider?: string
+          provider_specific_params?: Json | null
+          recommended_context_tokens?: number | null
           recommended_for?: string | null
+          recommended_max_tokens?: number | null
           supports_streaming?: boolean | null
           updated_at?: string
         }
@@ -1665,6 +1677,10 @@ export type Database = {
           performance_notes: string
           context_window_tokens: number
           supports_streaming: boolean
+          recommended_max_tokens: number
+          recommended_context_tokens: number
+          optimal_temperature: number
+          provider_specific_params: Json
         }[]
       }
       get_approval_stats: {
@@ -1744,6 +1760,15 @@ export type Database = {
           parameters: Json
           schedule: string
           updated_at: string
+        }[]
+      }
+      get_model_token_config: {
+        Args: { provider_param: string; model_param: string }
+        Returns: {
+          recommended_max_tokens: number
+          recommended_context_tokens: number
+          optimal_temperature: number
+          provider_specific_params: Json
         }[]
       }
       get_model_usage_distribution: {

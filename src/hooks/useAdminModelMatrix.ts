@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -38,6 +39,10 @@ export interface ModelConfigData {
   performance_notes?: string;
   context_window_tokens?: number;
   supports_streaming?: boolean;
+  recommended_max_tokens?: number;
+  recommended_context_tokens?: number;
+  optimal_temperature?: number;
+  provider_specific_params?: Record<string, any>;
 }
 
 export type UseCaseCategory = 
@@ -137,7 +142,7 @@ export const useAdminModelMatrix = () => {
         hasWarnings = true;
       }
 
-      // Handle config data
+      // Handle config data with new token fields
       if (configResponse.status === 'fulfilled') {
         const { data: configResult, error: configError } = configResponse.value;
         
@@ -146,7 +151,7 @@ export const useAdminModelMatrix = () => {
           setWarnings(prev => [...prev, `Model configuration failed to load: ${configError.message}`]);
           hasWarnings = true;
         } else {
-          // Process model configs with usage guidance data
+          // Process model configs with new token configuration data
           const processedConfigs = (configResult || []).map((config: any) => ({
             ...config,
             primary_use_cases: Array.isArray(config.primary_use_cases) 
@@ -156,7 +161,11 @@ export const useAdminModelMatrix = () => {
                 : [],
             cost_tier: config.cost_tier as CostTier,
             context_window_tokens: config.context_window_tokens || 0,
-            supports_streaming: config.supports_streaming !== false
+            supports_streaming: config.supports_streaming !== false,
+            recommended_max_tokens: config.recommended_max_tokens || 4000,
+            recommended_context_tokens: config.recommended_context_tokens || 8000,
+            optimal_temperature: Number(config.optimal_temperature) || 0.7,
+            provider_specific_params: config.provider_specific_params || {}
           }));
           
           setModelConfigs(processedConfigs);
@@ -223,16 +232,23 @@ export const useAdminModelMatrix = () => {
       performance_notes: string;
       context_window_tokens: number;
       supports_streaming: boolean;
+      recommended_max_tokens: number;
+      recommended_context_tokens: number;
+      optimal_temperature: number;
+      provider_specific_params: Record<string, any>;
     }>
   ) => {
     try {
-      // Convert primary_use_cases array to JSONB if provided
-      const dbUpdates = {
-        ...updates,
-        primary_use_cases: updates.primary_use_cases 
-          ? JSON.stringify(updates.primary_use_cases) 
-          : undefined
-      };
+      // Convert arrays and objects to proper format for database
+      const dbUpdates: any = { ...updates };
+      
+      if (updates.primary_use_cases) {
+        dbUpdates.primary_use_cases = JSON.stringify(updates.primary_use_cases);
+      }
+      
+      if (updates.provider_specific_params) {
+        dbUpdates.provider_specific_params = JSON.stringify(updates.provider_specific_params);
+      }
 
       const { error } = await supabase
         .from('model_configurations')

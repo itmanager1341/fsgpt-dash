@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -13,11 +14,12 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Settings, Key, Users, DollarSign, RefreshCw, Download, AlertCircle, CheckCircle, Info, Zap, Brain, Clock } from 'lucide-react';
+import { Settings, Key, Users, DollarSign, RefreshCw, Download, AlertCircle, CheckCircle, Info, Zap, Brain, Clock, Cpu, Thermometer } from 'lucide-react';
 import { useAdminModelMatrix, ModelConfigData, CostTier, UseCaseCategory } from '@/hooks/useAdminModelMatrix';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Textarea } from '@/components/ui/textarea';
 
 interface PricingUpdateResult {
   success: boolean;
@@ -42,7 +44,18 @@ const ModelManagementSettings: React.FC = () => {
   const [editValues, setEditValues] = useState<{
     defaultLimit: number;
     costPer1k: number;
-  }>({ defaultLimit: 0, costPer1k: 0 });
+    maxTokens: number;
+    contextTokens: number;
+    temperature: number;
+    providerParams: string;
+  }>({ 
+    defaultLimit: 0, 
+    costPer1k: 0, 
+    maxTokens: 4000, 
+    contextTokens: 8000, 
+    temperature: 0.7,
+    providerParams: '{}'
+  });
   const [isUpdatingPricing, setIsUpdatingPricing] = useState(false);
   const [lastUpdateResult, setLastUpdateResult] = useState<PricingUpdateResult | null>(null);
 
@@ -51,14 +64,30 @@ const ModelManagementSettings: React.FC = () => {
     setEditValues({
       defaultLimit: model.default_monthly_limit,
       costPer1k: model.cost_per_1k_tokens,
+      maxTokens: model.recommended_max_tokens || 4000,
+      contextTokens: model.recommended_context_tokens || 8000,
+      temperature: model.optimal_temperature || 0.7,
+      providerParams: JSON.stringify(model.provider_specific_params || {}, null, 2)
     });
   };
 
   const handleSaveModel = async (provider: string, modelName: string) => {
     try {
+      let parsedParams = {};
+      try {
+        parsedParams = JSON.parse(editValues.providerParams);
+      } catch (e) {
+        toast.error('Invalid JSON in provider-specific parameters');
+        return;
+      }
+
       await updateModelConfig(provider, modelName, {
         default_monthly_limit: editValues.defaultLimit,
         cost_per_1k_tokens: editValues.costPer1k,
+        recommended_max_tokens: editValues.maxTokens,
+        recommended_context_tokens: editValues.contextTokens,
+        optimal_temperature: editValues.temperature,
+        provider_specific_params: parsedParams
       });
       setEditingModel(null);
     } catch (error) {
@@ -285,10 +314,10 @@ const ModelManagementSettings: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings size={20} />
-              Global Model Configuration
+              Global Model Configuration & Token Settings
             </CardTitle>
             <CardDescription>
-              Manage which models are available system-wide and configure default settings
+              Manage model availability, pricing, and optimize token configurations for each provider
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -301,10 +330,11 @@ const ModelManagementSettings: React.FC = () => {
                   <TableHead>Use Cases</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Users</TableHead>
-                  <TableHead>Default Limit</TableHead>
+                  <TableHead>Monthly Limit</TableHead>
                   <TableHead>Cost/1K Tokens</TableHead>
+                  <TableHead>Token Settings</TableHead>
+                  <TableHead>Temperature</TableHead>
                   <TableHead>Monthly Usage</TableHead>
-                  <TableHead>Context</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -402,38 +432,105 @@ const ModelManagementSettings: React.FC = () => {
                         )}
                       </TableCell>
                       <TableCell>
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-1">
+                              <Cpu size={12} />
+                              <Input
+                                type="number"
+                                value={editValues.maxTokens}
+                                onChange={(e) => setEditValues(prev => ({
+                                  ...prev,
+                                  maxTokens: parseInt(e.target.value) || 4000
+                                }))}
+                                className="w-16 text-xs"
+                                placeholder="Max"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock size={12} />
+                              <Input
+                                type="number"
+                                value={editValues.contextTokens}
+                                onChange={(e) => setEditValues(prev => ({
+                                  ...prev,
+                                  contextTokens: parseInt(e.target.value) || 8000
+                                }))}
+                                className="w-16 text-xs"
+                                placeholder="Context"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1 text-sm">
+                              <Cpu size={12} />
+                              <span>{model.recommended_max_tokens || 4000}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <Clock size={12} />
+                              <span>{((model.recommended_context_tokens || 8000) / 1000).toFixed(0)}K</span>
+                            </div>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <div className="flex items-center gap-1">
+                            <Thermometer size={12} />
+                            <Input
+                              type="number"
+                              value={editValues.temperature}
+                              onChange={(e) => setEditValues(prev => ({
+                                ...prev,
+                                temperature: parseFloat(e.target.value) || 0.7
+                              }))}
+                              className="w-16"
+                              step="0.1"
+                              min="0"
+                              max="2"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <Thermometer size={12} />
+                            <span className="text-sm">{model.optimal_temperature || 0.7}</span>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1">
                           <DollarSign size={14} />
                           ${model.total_monthly_usage.toFixed(2)}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Clock size={14} />
-                          <span className="text-sm">
-                            {model.context_window_tokens 
-                              ? `${(model.context_window_tokens / 1000).toFixed(0)}K`
-                              : 'N/A'
-                            }
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
                         {isEditing ? (
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              onClick={() => handleSaveModel(model.provider, model.model_name)}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setEditingModel(null)}
-                            >
-                              Cancel
-                            </Button>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveModel(model.provider, model.model_name)}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingModel(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                            <Textarea
+                              value={editValues.providerParams}
+                              onChange={(e) => setEditValues(prev => ({
+                                ...prev,
+                                providerParams: e.target.value
+                              }))}
+                              placeholder="Provider params (JSON)"
+                              className="text-xs h-20 w-48"
+                            />
                           </div>
                         ) : (
                           <Button
@@ -442,7 +539,7 @@ const ModelManagementSettings: React.FC = () => {
                             onClick={() => handleEditModel(model)}
                             disabled={model.is_deprecated}
                           >
-                            Edit
+                            Configure
                           </Button>
                         )}
                       </TableCell>

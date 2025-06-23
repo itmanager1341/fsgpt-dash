@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -47,12 +46,12 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Model shortcuts mapping
+  // Model shortcuts mapping with updated display names
   const modelShortcuts = {
-    '@gpt4': { model: 'gpt-4.1-2025-04-14', provider: 'openai', display: 'GPT-4.1' },
-    '@o3': { model: 'o3-2025-04-16', provider: 'openai', display: 'O3' },
-    '@fast': { model: 'gpt-4o-mini', provider: 'openai', display: 'GPT-4o-mini' },
-    '@perplexity': { model: 'llama-3.1-sonar-small-128k-online', provider: 'perplexity', display: 'Perplexity' },
+    '@gpt4': { model: 'gpt-4.1-2025-04-14', provider: 'openai', display: 'GPT-4.1 (2025)' },
+    '@o3': { model: 'o3-2025-04-16', provider: 'openai', display: 'O3 (2025)' },
+    '@fast': { model: 'gpt-4o-mini', provider: 'openai', display: 'GPT-4o Mini' },
+    '@perplexity': { model: 'llama-3.1-sonar-small-128k-online', provider: 'perplexity', display: 'Perplexity Sonar Small' },
   };
 
   // Tool commands
@@ -68,12 +67,27 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
     m.modelName === selectedModel && m.provider === selectedProvider
   );
 
-  const getModelDisplayName = (modelName: string) => {
-    if (modelName === 'gpt-4.1-2025-04-14') return 'GPT-4.1';
-    if (modelName === 'o3-2025-04-16') return 'O3';
-    if (modelName === 'gpt-4o-mini') return 'Fast';
-    if (modelName === 'llama-3.1-sonar-small-128k-online') return 'Perplexity';
-    return modelName.split('-')[0].toUpperCase();
+  // Updated function to provide more descriptive model names
+  const getModelDisplayName = (modelName: string, isFullName: boolean = false) => {
+    const modelMappings = {
+      'gpt-4.1-2025-04-14': isFullName ? 'GPT-4.1 (April 2025)' : 'GPT-4.1',
+      'o3-2025-04-16': isFullName ? 'O3 (April 2025)' : 'O3',
+      'o4-mini-2025-04-16': isFullName ? 'O4 Mini (April 2025)' : 'O4 Mini',
+      'gpt-4.1-mini-2025-04-14': isFullName ? 'GPT-4.1 Mini (April 2025)' : 'GPT-4.1 Mini',
+      'gpt-4o': isFullName ? 'GPT-4o (Omni)' : 'GPT-4o',
+      'gpt-4o-mini': isFullName ? 'GPT-4o Mini (Fast)' : 'GPT-4o Mini',
+      'claude-opus-4-20250514': isFullName ? 'Claude 4 Opus (May 2025)' : 'Claude 4 Opus',
+      'claude-sonnet-4-20250514': isFullName ? 'Claude 4 Sonnet (May 2025)' : 'Claude 4 Sonnet',
+      'claude-3-5-haiku-20241022': isFullName ? 'Claude 3.5 Haiku (Oct 2024)' : 'Claude 3.5 Haiku',
+      'claude-3-7-sonnet-20250219': isFullName ? 'Claude 3.7 Sonnet (Feb 2025)' : 'Claude 3.7 Sonnet',
+      'claude-3-5-sonnet-20241022': isFullName ? 'Claude 3.5 Sonnet (Oct 2024)' : 'Claude 3.5 Sonnet',
+      'claude-3-opus-20240229': isFullName ? 'Claude 3 Opus (Feb 2024)' : 'Claude 3 Opus',
+      'llama-3.1-sonar-small-128k-online': isFullName ? 'Perplexity Sonar Small (128k)' : 'Perplexity Small',
+      'llama-3.1-sonar-large-128k-online': isFullName ? 'Perplexity Sonar Large (128k)' : 'Perplexity Large',
+      'llama-3.1-sonar-huge-128k-online': isFullName ? 'Perplexity Sonar Huge (128k)' : 'Perplexity Huge',
+    };
+
+    return modelMappings[modelName as keyof typeof modelMappings] || (isFullName ? modelName : modelName.split('-')[0].toUpperCase());
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -207,18 +221,25 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
               <ChevronDown size={12} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuContent align="start" className="w-72">
             {modelAccess.filter(m => m.isEnabled && !m.isOverLimit).map((model) => (
               <DropdownMenuItem
                 key={`${model.provider}-${model.modelName}`}
                 onClick={() => onModelSelect(model.modelName, model.provider)}
-                className="flex items-center justify-between"
+                className="flex items-center justify-between p-3"
               >
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span>{getModelDisplayName(model.modelName)}</span>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="font-medium text-sm truncate">
+                      {getModelDisplayName(model.modelName, true)}
+                    </span>
+                    <span className="text-xs text-muted-foreground capitalize">
+                      {model.provider}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground shrink-0">
                   {Math.round(model.usagePercentage)}%
                 </div>
               </DropdownMenuItem>

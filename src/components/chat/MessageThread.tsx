@@ -21,13 +21,17 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
 
   if (!session) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center space-y-4 max-w-md">
-          <Bot size={64} className="mx-auto text-muted-foreground" />
-          <h3 className="text-xl font-semibold">Welcome to AI Assistant</h3>
-          <p className="text-muted-foreground">
-            Select a conversation from the sidebar or start a new one to begin chatting.
-          </p>
+      <div className="h-full flex items-center justify-center p-8">
+        <div className="text-center space-y-6 max-w-2xl">
+          <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
+            <Bot size={32} className="text-primary" />
+          </div>
+          <div className="space-y-3">
+            <h1 className="text-3xl font-semibold">What can I help you with?</h1>
+            <p className="text-muted-foreground text-lg">
+              I'm here to assist with your questions, tasks, and creative projects.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -35,13 +39,17 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
 
   if (session.messages.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center space-y-4 max-w-md">
-          <Bot size={64} className="mx-auto text-primary" />
-          <h3 className="text-xl font-semibold">Start Your Conversation</h3>
-          <p className="text-muted-foreground">
-            Ask me anything! I'm here to help with your questions and tasks.
-          </p>
+      <div className="h-full flex items-center justify-center p-8">
+        <div className="text-center space-y-6 max-w-2xl">
+          <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
+            <Bot size={32} className="text-primary" />
+          </div>
+          <div className="space-y-3">
+            <h1 className="text-3xl font-semibold">What can I help you with?</h1>
+            <p className="text-muted-foreground text-lg">
+              Start a conversation by typing your question or request below.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -59,7 +67,7 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
     if (message.role === 'assistant' && message.model_used && message.provider_used) {
       return (
         <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-          <span className="bg-muted px-2 py-0.5 rounded">
+          <span className="bg-muted px-2 py-0.5 rounded text-xs">
             {message.provider_used} • {message.model_used}
           </span>
           {message.cost && message.cost > 0.0001 && (
@@ -75,132 +83,114 @@ const MessageThread: React.FC<MessageThreadProps> = ({ session }) => {
 
   // Enhanced unique key generation to prevent duplicates
   const generateMessageKey = (message: MessageWithLoading, index: number) => {
-    // Create a stable hash from content and timestamp for better uniqueness
     const contentHash = message.content.substring(0, 20).replace(/\s+/g, '');
     const timestamp = new Date(message.created_at).getTime();
     const rolePrefix = message.role.substring(0, 1);
     
-    // Prioritize database IDs over local IDs, but ensure uniqueness
     if (message.id && !message.id.startsWith('temp-')) {
       return `${rolePrefix}-db-${message.id}`;
     }
     if (message.localId) {
       return `${rolePrefix}-local-${message.localId}`;
     }
-    // Enhanced fallback with better uniqueness
     return `${rolePrefix}-fallback-${index}-${timestamp}-${contentHash}`;
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-6">
-      {session.messages.map((message, index) => (
-        <div
-          key={generateMessageKey(message, index)}
-          className={cn(
-            "flex gap-4 max-w-4xl",
-            message.role === 'user' ? "ml-auto flex-row-reverse" : ""
-          )}
-        >
-          {/* Avatar */}
-          <div className={cn(
-            "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-            message.role === 'user' 
-              ? "bg-primary text-primary-foreground" 
-              : "bg-muted"
-          )}>
-            {message.role === 'user' ? (
-              <User size={16} />
-            ) : (
-              <Bot size={16} />
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        {session.messages.map((message, index) => (
+          <div
+            key={generateMessageKey(message, index)}
+            className={cn(
+              "flex gap-4",
+              message.role === 'user' ? "flex-row-reverse" : ""
             )}
-          </div>
-
-          {/* Message Content */}
-          <div className={cn(
-            "flex-1 space-y-2",
-            message.role === 'user' ? "text-right" : ""
-          )}>
-            {/* Message Bubble */}
+          >
+            {/* Avatar */}
             <div className={cn(
-              "inline-block max-w-full p-4 rounded-2xl",
-              message.role === 'user'
-                ? "bg-primary text-primary-foreground rounded-tr-sm"
-                : "bg-muted rounded-tl-sm",
-              message.error && "border border-destructive"
+              "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
+              message.role === 'user' 
+                ? "bg-primary text-primary-foreground" 
+                : "bg-muted"
             )}>
-              {message.isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin">
-                    <Clock size={16} />
-                  </div>
-                  <span className="text-sm">Thinking...</span>
-                </div>
-              ) : message.error ? (
-                <div className="flex items-center gap-2 text-destructive">
-                  <AlertCircle size={16} />
-                  <span className="text-sm">{message.error}</span>
-                </div>
+              {message.role === 'user' ? (
+                <User size={16} />
               ) : (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <p className="whitespace-pre-wrap m-0">{message.content}</p>
-                </div>
+                <Bot size={16} />
               )}
             </div>
 
-            {/* Message Metadata */}
+            {/* Message Content */}
             <div className={cn(
-              "flex items-center gap-2 text-xs text-muted-foreground",
-              message.role === 'user' ? "justify-end" : ""
+              "flex-1 space-y-2 min-w-0",
+              message.role === 'user' ? "text-right" : ""
             )}>
-              <span>{formatTimestamp(message.created_at)}</span>
-              {message.isStreaming && (
-                <span className="text-primary">Streaming...</span>
-              )}
-            </div>
-
-            {/* Model Badge for Assistant Messages */}
-            {message.role === 'assistant' && (
-              <div>
-                {getModelBadge(message)}
-              </div>
-            )}
-
-            {/* Token Usage */}
-            {message.role === 'assistant' && message.total_tokens && (
-              <div className="text-xs text-muted-foreground">
-                {message.total_tokens} tokens
-                {message.prompt_tokens && message.completion_tokens && (
-                  <span className="ml-2">
-                    ({message.prompt_tokens} + {message.completion_tokens})
-                  </span>
+              {/* Message Bubble */}
+              <div className={cn(
+                "max-w-none",
+                message.error && "border border-destructive rounded-lg p-3"
+              )}>
+                {message.isLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="animate-spin">
+                      <Clock size={16} />
+                    </div>
+                    <span className="text-sm">Thinking...</span>
+                  </div>
+                ) : message.error ? (
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertCircle size={16} />
+                    <span className="text-sm">{message.error}</span>
+                  </div>
+                ) : (
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <p className="whitespace-pre-wrap m-0 leading-relaxed">{message.content}</p>
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      ))}
 
-      {session.isLoading && (
-        <div className="flex gap-4">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-            <Bot size={16} />
+              {/* Message Metadata */}
+              <div className={cn(
+                "flex items-center gap-2 text-xs text-muted-foreground",
+                message.role === 'user' ? "justify-end" : ""
+              )}>
+                <span>{formatTimestamp(message.created_at)}</span>
+                {message.isStreaming && (
+                  <span className="text-primary">Streaming...</span>
+                )}
+              </div>
+
+              {/* Model Badge for Assistant Messages */}
+              {message.role === 'assistant' && getModelBadge(message)}
+            </div>
           </div>
-          <div className="flex-1">
-            <div className="bg-muted p-4 rounded-2xl rounded-tl-sm">
-              <div className="flex items-center gap-2">
-                <div className="animate-pulse flex space-x-1">
-                  <div className="w-2 h-2 bg-current rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+        ))}
+
+        {session.isLoading && (
+          <div className="flex gap-4">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+              <Bot size={16} />
+            </div>
+            <div className="flex-1">
+              <div className="text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="animate-pulse flex space-x-1">
+                    <div className="w-2 h-2 bg-current rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                  <span className="text-sm">Generating response...</span>
                 </div>
-                <span className="text-sm text-muted-foreground">Generating response...</span>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div ref={messagesEndRef} />
+        {/* Add bottom padding to ensure last message isn't hidden behind sticky input */}
+        <div className="h-32" />
+        <div ref={messagesEndRef} />
+      </div>
     </div>
   );
 };

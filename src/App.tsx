@@ -2,7 +2,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import UserApprovalGuard from "./components/UserApprovalGuard";
@@ -29,6 +29,18 @@ const queryClient = new QueryClient({
   },
 });
 
+// Component to conditionally render navbar
+const ConditionalNavbar = () => {
+  const location = useLocation();
+  
+  // Hide navbar on chat page
+  if (location.pathname === '/chat') {
+    return null;
+  }
+  
+  return <Navbar />;
+};
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -39,7 +51,7 @@ function App() {
               <Toaster />
               <BrowserRouter>
                 <div className="min-h-screen bg-background">
-                  <Navbar />
+                  <ConditionalNavbar />
                   <main>
                     <Routes>
                       <Route path="/" element={<Index />} />

@@ -6,7 +6,7 @@ import ChatInterface from '@/components/chat/ChatInterface';
 const ChatPage: React.FC = () => {
   return (
     <ProtectedRoute>
-      <div className="h-screen">
+      <div className="h-screen w-full">
         <ChatInterface />
       </div>
     </ProtectedRoute>

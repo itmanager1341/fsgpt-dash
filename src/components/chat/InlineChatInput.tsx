@@ -185,163 +185,165 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
   };
 
   return (
-    <div className="relative p-4 border-t bg-background">
-      {/* Selected Tool Indicator */}
-      {selectedTool && (
-        <div className="mb-2">
-          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-            {React.createElement(toolCommands[selectedTool as keyof typeof toolCommands].icon, { size: 12 })}
-            {toolCommands[selectedTool as keyof typeof toolCommands].description}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-4 w-4 p-0 ml-1"
-              onClick={() => setSelectedTool(null)}
-            >
-              ×
-            </Button>
-          </Badge>
-        </div>
-      )}
-
-      {/* Input Area */}
-      <div className="flex items-end gap-3">
-        {/* Attachment Button */}
-        <Button variant="ghost" size="sm" className="p-2 h-9 w-9">
-          <Paperclip size={16} />
-        </Button>
-
-        {/* Model Selector */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center gap-1 h-9">
-              <span className="text-xs font-medium">
-                {getModelDisplayName(selectedModel)}
-              </span>
-              <ChevronDown size={12} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-72">
-            {modelAccess.filter(m => m.isEnabled && !m.isOverLimit).map((model) => (
-              <DropdownMenuItem
-                key={`${model.provider}-${model.modelName}`}
-                onClick={() => onModelSelect(model.modelName, model.provider)}
-                className="flex items-center justify-between p-3"
+    <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="max-w-3xl mx-auto p-4">
+        {/* Selected Tool Indicator */}
+        {selectedTool && (
+          <div className="mb-2">
+            <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+              {React.createElement(toolCommands[selectedTool as keyof typeof toolCommands].icon, { size: 12 })}
+              {toolCommands[selectedTool as keyof typeof toolCommands].description}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-4 w-4 p-0 ml-1"
+                onClick={() => setSelectedTool(null)}
               >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="font-medium text-sm truncate">
-                      {getModelDisplayName(model.modelName, true)}
-                    </span>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {model.provider}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground shrink-0">
-                  {Math.round(model.usagePercentage)}%
-                </div>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                ×
+              </Button>
+            </Badge>
+          </div>
+        )}
 
-        {/* Main Input */}
-        <div className="flex-1 relative">
-          <Textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled}
-            className="min-h-[36px] max-h-[120px] resize-none pr-12 text-sm"
-            rows={1}
-          />
-          
-          {/* Send Button */}
-          <Button
-            onClick={handleSubmit}
-            disabled={disabled || !message.trim()}
-            size="sm"
-            className="absolute right-2 bottom-2 h-7 w-7 p-0"
-          >
-            <Send size={14} />
+        {/* Input Area */}
+        <div className="flex items-end gap-3">
+          {/* Attachment Button */}
+          <Button variant="ghost" size="sm" className="p-2 h-9 w-9">
+            <Paperclip size={16} />
           </Button>
 
-          {/* Suggestions Dropdown */}
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 bg-background border rounded-md shadow-lg z-10">
-              {suggestions.map((suggestion) => (
-                <div
-                  key={suggestion}
-                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2"
-                  onClick={() => handleSuggestionSelect(suggestion)}
-                >
-                  {suggestion.startsWith('@') && (
-                    <>
-                      <Zap size={14} className="text-blue-500" />
-                      <span className="font-medium">{suggestion}</span>
-                      <span className="text-muted-foreground">
-                        {modelShortcuts[suggestion as keyof typeof modelShortcuts]?.display}
-                      </span>
-                    </>
-                  )}
-                  {suggestion.startsWith('/') && (
-                    <>
-                      {React.createElement(toolCommands[suggestion as keyof typeof toolCommands].icon, { 
-                        size: 14, 
-                        className: "text-purple-500" 
-                      })}
-                      <span className="font-medium">{suggestion}</span>
-                      <span className="text-muted-foreground">
-                        {toolCommands[suggestion as keyof typeof toolCommands].description}
-                      </span>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Tools Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 px-2">
-              <span className="text-xs mr-1">Tools</span>
-              <ChevronDown size={12} />
+          {/* Main Input */}
+          <div className="flex-1 relative">
+            <Textarea
+              ref={textareaRef}
+              value={message}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={disabled}
+              className="min-h-[44px] max-h-[120px] resize-none pr-12 text-sm border-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring"
+              rows={1}
+            />
+            
+            {/* Send Button */}
+            <Button
+              onClick={handleSubmit}
+              disabled={disabled || !message.trim()}
+              size="sm"
+              className="absolute right-2 bottom-2 h-8 w-8 p-0"
+            >
+              <Send size={14} />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            {Object.entries(toolCommands).map(([command, config]) => (
-              <DropdownMenuItem
-                key={command}
-                onClick={() => setSelectedTool(command)}
-                className="flex items-center gap-2"
-              >
-                <config.icon size={14} />
-                <span>{config.description}</span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
 
-      {/* Model Status */}
-      {currentModel && (
-        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <div className={`w-1.5 h-1.5 rounded-full ${
-              currentModel.usagePercentage < 80 ? 'bg-green-500' : 
-              currentModel.usagePercentage < 95 ? 'bg-yellow-500' : 'bg-red-500'
-            }`} />
-            <span>{currentModel.provider}/{getModelDisplayName(currentModel.modelName)}</span>
+            {/* Suggestions Dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-background border rounded-md shadow-lg z-10">
+                {suggestions.map((suggestion) => (
+                  <div
+                    key={suggestion}
+                    className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2"
+                    onClick={() => handleSuggestionSelect(suggestion)}
+                  >
+                    {suggestion.startsWith('@') && (
+                      <>
+                        <Zap size={14} className="text-blue-500" />
+                        <span className="font-medium">{suggestion}</span>
+                        <span className="text-muted-foreground">
+                          {modelShortcuts[suggestion as keyof typeof modelShortcuts]?.display}
+                        </span>
+                      </>
+                    )}
+                    {suggestion.startsWith('/') && (
+                      <>
+                        {React.createElement(toolCommands[suggestion as keyof typeof toolCommands].icon, { 
+                          size: 14, 
+                          className: "text-purple-500" 
+                        })}
+                        <span className="font-medium">{suggestion}</span>
+                        <span className="text-muted-foreground">
+                          {toolCommands[suggestion as keyof typeof toolCommands].description}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <span>${currentModel.remainingCredits.toFixed(2)} remaining</span>
+
+          {/* Model Selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="flex items-center gap-1 h-9">
+                <span className="text-xs font-medium">
+                  {getModelDisplayName(selectedModel)}
+                </span>
+                <ChevronDown size={12} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              {modelAccess.filter(m => m.isEnabled && !m.isOverLimit).map((model) => (
+                <DropdownMenuItem
+                  key={`${model.provider}-${model.modelName}`}
+                  onClick={() => onModelSelect(model.modelName, model.provider)}
+                  className="flex items-center justify-between p-3"
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-medium text-sm truncate">
+                        {getModelDisplayName(model.modelName, true)}
+                      </span>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {model.provider}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground shrink-0">
+                    {Math.round(model.usagePercentage)}%
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Tools Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 px-2">
+                <span className="text-xs mr-1">Tools</span>
+                <ChevronDown size={12} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {Object.entries(toolCommands).map(([command, config]) => (
+                <DropdownMenuItem
+                  key={command}
+                  onClick={() => setSelectedTool(command)}
+                  className="flex items-center gap-2"
+                >
+                  <config.icon size={14} />
+                  <span>{config.description}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      )}
+
+        {/* Model Status */}
+        {currentModel && (
+          <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                currentModel.usagePercentage < 80 ? 'bg-green-500' : 
+                currentModel.usagePercentage < 95 ? 'bg-yellow-500' : 'bg-red-500'
+              }`} />
+              <span>{currentModel.provider}/{getModelDisplayName(currentModel.modelName)}</span>
+            </div>
+            <span>${currentModel.remainingCredits.toFixed(2)} remaining</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

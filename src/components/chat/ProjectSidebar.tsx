@@ -5,7 +5,6 @@ import { ProjectWithConversations } from '@/types/projects';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { 
   Dialog,
   DialogContent,
@@ -24,13 +23,13 @@ import {
   Folder, 
   FolderOpen, 
   MessageSquare, 
-  Clock, 
   ChevronRight, 
   ChevronDown,
   MoreHorizontal,
   Trash,
   Edit,
-  Move
+  Menu,
+  PanelLeftClose
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
@@ -41,6 +40,7 @@ interface ProjectSidebarProps {
   onNewConversation: (projectId?: string) => void;
   onSelectConversation: (conversationId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
+  onToggleSidebar: () => void;
   isLoading: boolean;
 }
 
@@ -50,6 +50,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
+  onToggleSidebar,
   isLoading,
 }) => {
   const { 
@@ -62,7 +63,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [createProjectDialog, setCreateProjectDialog] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
-  const [selectedProjectForNew, setSelectedProjectForNew] = useState<string | undefined>();
 
   // Get conversations not assigned to any project
   const unassignedConversations = sessions.filter(session => 
@@ -92,34 +92,12 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     setCreateProjectDialog(false);
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-    } else if (diffInHours < 24 * 7) {
-      return date.toLocaleDateString('en-US', { 
-        weekday: 'short' 
-      });
-    } else {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    }
-  };
-
   const getDisplayTitle = (session: ChatSession) => {
     if (session.conversation.title === 'New Conversation' && session.messages.length > 0) {
       const firstUserMessage = session.messages.find(m => m.role === 'user');
       if (firstUserMessage) {
-        const content = firstUserMessage.content.replace(/^\[SEARCH MODE\]\s*Please search for and provide relevant information about:\s*/i, '').trim();
-        return content.length > 40 ? `${content.substring(0, 40)}...` : content;
+        const content = firstUserMessage.content.trim();
+        return content.length > 30 ? `${content.substring(0, 30)}...` : content;
       }
     }
     return session.conversation.title;
@@ -131,23 +109,18 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     const hasSubprojects = project.subprojects && project.subprojects.length > 0;
     
     return (
-      <div key={project.id} className={cn("select-none", level > 0 && "ml-4")}>
+      <div key={project.id} className={cn("select-none", level > 0 && "ml-3")}>
         {/* Project Header */}
-        <div className="flex items-center justify-between group py-1">
+        <div className="flex items-center justify-between group rounded-lg hover:bg-muted/50 px-2 py-1.5">
           <div 
-            className="flex items-center gap-2 flex-1 cursor-pointer rounded px-2 py-1 hover:bg-muted/50"
+            className="flex items-center gap-2 flex-1 cursor-pointer"
             onClick={() => toggleProjectExpansion(project.id)}
           >
             {(hasConversations || hasSubprojects) && (
               isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
             )}
-            {isExpanded ? <FolderOpen size={16} style={{ color: project.color }} /> : <Folder size={16} style={{ color: project.color }} />}
-            <span className="text-sm font-medium truncate">{project.name}</span>
-            {hasConversations && (
-              <Badge variant="secondary" className="text-xs ml-auto">
-                {project.conversations.length}
-              </Badge>
-            )}
+            {isExpanded ? <FolderOpen size={16} className="text-muted-foreground" /> : <Folder size={16} className="text-muted-foreground" />}
+            <span className="text-sm truncate">{project.name}</span>
           </div>
           
           <DropdownMenu>
@@ -175,7 +148,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
         {/* Project Contents */}
         {isExpanded && (
-          <div className="ml-2">
+          <div className="ml-2 space-y-0.5">
             {/* Subprojects */}
             {project.subprojects?.map(subproject => 
               renderProject(subproject, level + 1)
@@ -190,22 +163,13 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                 <div
                   key={conv.id}
                   className={cn(
-                    "flex items-center gap-2 px-2 py-1 mx-2 my-1 rounded cursor-pointer text-sm hover:bg-muted/50",
+                    "flex items-center gap-2 px-2 py-1.5 ml-4 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
                     activeSession?.conversation.id === conv.id && "bg-accent"
                   )}
                   onClick={() => onSelectConversation(conv.id)}
                 >
-                  <MessageSquare size={14} className="text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate">{getDisplayTitle(session)}</div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock size={10} />
-                      {formatTimestamp(conv.updated_at)}
-                      {conv.total_cost > 0 && (
-                        <span className="text-green-600">${conv.total_cost.toFixed(4)}</span>
-                      )}
-                    </div>
-                  </div>
+                  <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
+                  <span className="truncate flex-1">{getDisplayTitle(session)}</span>
                 </div>
               );
             })}
@@ -216,28 +180,36 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b">
+    <div className="h-full flex flex-col bg-muted/20">
+      {/* Header with New Chat and Sidebar Toggle */}
+      <div className="p-3 border-b">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Projects</h2>
           <Button
-            onClick={() => setCreateProjectDialog(true)}
+            variant="ghost"
             size="sm"
-            disabled={isLoading}
-            className="flex items-center gap-2"
+            onClick={onToggleSidebar}
+            className="p-1 h-8 w-8"
           >
-            <Plus size={16} />
-            Project
+            <PanelLeftClose size={16} />
+          </Button>
+          
+          <Button
+            onClick={() => onNewConversation()}
+            disabled={isLoading}
+            className="flex-1 ml-2 justify-start"
+            variant="outline"
+          >
+            <Plus size={16} className="mr-2" />
+            New chat
           </Button>
         </div>
       </div>
 
-      {/* Projects List */}
+      {/* Projects and Conversations */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
           {isProjectsLoading ? (
-            <div className="text-center text-muted-foreground p-4">
+            <div className="text-center text-muted-foreground p-4 text-sm">
               Loading projects...
             </div>
           ) : (
@@ -248,45 +220,45 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               {/* Unassigned Conversations */}
               {unassignedConversations.length > 0 && (
                 <div className="mt-4">
-                  <div className="px-2 py-1 text-sm font-medium text-muted-foreground">
-                    Unassigned Conversations
-                  </div>
                   {unassignedConversations.map(session => (
                     <div
                       key={session.conversation.id}
                       className={cn(
-                        "flex items-center gap-2 px-2 py-1 mx-2 my-1 rounded cursor-pointer text-sm hover:bg-muted/50",
+                        "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
                         activeSession?.conversation.id === session.conversation.id && "bg-accent"
                       )}
                       onClick={() => onSelectConversation(session.conversation.id)}
                     >
-                      <MessageSquare size={14} className="text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">{getDisplayTitle(session)}</div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock size={10} />
-                          {formatTimestamp(session.conversation.updated_at)}
-                          {session.conversation.total_cost > 0 && (
-                            <span className="text-green-600">${session.conversation.total_cost.toFixed(4)}</span>
-                          )}
-                        </div>
-                      </div>
+                      <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
+                      <span className="truncate flex-1">{getDisplayTitle(session)}</span>
                     </div>
                   ))}
                 </div>
               )}
 
               {projectsWithConversations.length === 0 && unassignedConversations.length === 0 && (
-                <div className="p-4 text-center text-muted-foreground">
-                  <Folder size={48} className="mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No projects yet</p>
-                  <p className="text-xs">Create a project to organize your conversations</p>
+                <div className="p-6 text-center text-muted-foreground">
+                  <MessageSquare size={32} className="mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">No conversations yet</p>
                 </div>
               )}
             </>
           )}
         </div>
       </ScrollArea>
+
+      {/* Footer */}
+      <div className="p-3 border-t">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCreateProjectDialog(true)}
+          className="w-full justify-start text-muted-foreground"
+        >
+          <Plus size={14} className="mr-2" />
+          New project
+        </Button>
+      </div>
 
       {/* Create Project Dialog */}
       <Dialog open={createProjectDialog} onOpenChange={setCreateProjectDialog}>

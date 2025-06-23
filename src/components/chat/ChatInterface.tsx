@@ -3,13 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { useChat } from '@/hooks/useChat';
 import { useUserApiAccess } from '@/hooks/useUserApiAccess';
 import { useSidebar } from '@/hooks/useSidebar';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { MessageSquare, Search, Menu, X } from 'lucide-react';
 import ProjectSidebar from './ProjectSidebar';
 import MessageThread from './MessageThread';
 import InlineChatInput from './InlineChatInput';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
 const ChatInterface: React.FC = () => {
@@ -33,7 +29,6 @@ const ChatInterface: React.FC = () => {
 
   const { isCollapsed, toggleSidebar } = useSidebar();
 
-  const [chatMode, setChatMode] = useState<'chat' | 'search'>('chat');
   const [selectedProvider, setSelectedProvider] = useState('openai');
   const [selectedModel, setSelectedModel] = useState('gpt-4.1-2025-04-14');
 
@@ -59,14 +54,7 @@ const ChatInterface: React.FC = () => {
   }, [modelAccess, selectedModel]);
 
   const handleNewConversation = async (projectId?: string) => {
-    const title = chatMode === 'search' ? 'Search Session' : undefined;
-    const newSession = await createConversation(title);
-    
-    // If projectId is provided and we have a new session, assign it to the project
-    if (projectId && newSession) {
-      // This would be handled in the useChat hook with project support
-      console.log('Would assign conversation to project:', projectId);
-    }
+    const newSession = await createConversation(undefined, undefined, projectId);
   };
 
   const handleSelectConversation = (conversationId: string) => {
@@ -78,34 +66,19 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSendMessage = async (content: string, provider?: string, model?: string, documentIds?: string[]) => {
-    let processedContent = content;
-    
-    // Modify prompt for search mode
-    if (chatMode === 'search') {
-      processedContent = `[SEARCH MODE] Please search for and provide relevant information about: ${content}`;
-    }
-
     if (!activeSession) {
-      // Create new conversation with the message content for better title generation
-      const title = chatMode === 'search' ? 'Search Session' : undefined;
-      const newSession = await createConversation(title, content);
+      const newSession = await createConversation(undefined, content);
       if (newSession) {
-        await sendMessage(newSession.conversation.id, processedContent, selectedProvider, selectedModel, documentIds, true);
+        await sendMessage(newSession.conversation.id, content, selectedProvider, selectedModel, documentIds, true);
       }
     } else {
-      await sendMessage(activeSession.conversation.id, processedContent, selectedProvider, selectedModel, documentIds, true);
+      await sendMessage(activeSession.conversation.id, content, selectedProvider, selectedModel, documentIds, true);
     }
   };
 
   const handleModelSelect = (model: string, provider: string) => {
     setSelectedModel(model);
     setSelectedProvider(provider);
-  };
-
-  const getPlaceholder = () => {
-    return chatMode === 'search' 
-      ? 'Search your knowledge base... (try @gpt4 or /search)' 
-      : 'Type your message... (try @gpt4 for GPT-4.1 or /analyze)';
   };
 
   // Show loading state while API access data is being fetched
@@ -121,10 +94,10 @@ const ChatInterface: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex">
+    <div className="h-screen flex w-full">
       {/* Sidebar */}
       <div className={cn(
-        "border-r bg-background transition-all duration-300 ease-in-out overflow-hidden",
+        "border-r bg-background transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0",
         isCollapsed ? "w-0" : "w-80"
       )}>
         <div className={cn(
@@ -137,69 +110,31 @@ const ChatInterface: React.FC = () => {
             onNewConversation={handleNewConversation}
             onSelectConversation={handleSelectConversation}
             onDeleteConversation={handleDeleteConversation}
+            onToggleSidebar={toggleSidebar}
             isLoading={isLoading}
           />
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header with Sidebar Toggle and Mode Toggle */}
-        <div className="border-b bg-background p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* Sidebar Toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleSidebar}
-                className="flex items-center gap-2"
-              >
-                {isCollapsed ? <Menu size={16} /> : <X size={16} />}
-                <span className="hidden sm:inline">
-                  {isCollapsed ? 'Show' : 'Hide'} Sidebar
-                </span>
-              </Button>
-
-              <Separator orientation="vertical" className="h-6" />
-
-              {/* Mode Toggle */}
-              <Tabs value={chatMode} onValueChange={(value) => setChatMode(value as 'chat' | 'search')}>
-                <TabsList>
-                  <TabsTrigger value="chat" className="flex items-center gap-2">
-                    <MessageSquare size={16} />
-                    Chat
-                  </TabsTrigger>
-                  <TabsTrigger value="search" className="flex items-center gap-2">
-                    <Search size={16} />
-                    Search
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-            
-            {/* Mode info */}
-            <div className="text-sm text-muted-foreground">
-              {chatMode === 'search' ? 'Knowledge Search Mode' : 'AI Chat Mode'}
-            </div>
-          </div>
-        </div>
-
+      <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Message Thread */}
         <div className="flex-1 overflow-hidden">
           <MessageThread session={activeSession} />
         </div>
 
-        {/* Enhanced Input Area */}
-        <InlineChatInput
-          onSendMessage={handleSendMessage}
-          disabled={isLoading}
-          placeholder={getPlaceholder()}
-          modelAccess={modelAccess}
-          selectedModel={selectedModel}
-          selectedProvider={selectedProvider}
-          onModelSelect={handleModelSelect}
-        />
+        {/* Sticky Input Area */}
+        <div className="sticky bottom-0 bg-background">
+          <InlineChatInput
+            onSendMessage={handleSendMessage}
+            disabled={isLoading}
+            placeholder="What are you working on?"
+            modelAccess={modelAccess}
+            selectedModel={selectedModel}
+            selectedProvider={selectedProvider}
+            onModelSelect={handleModelSelect}
+          />
+        </div>
       </div>
     </div>
   );

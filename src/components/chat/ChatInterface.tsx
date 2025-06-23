@@ -19,6 +19,7 @@ const ChatInterface: React.FC = () => {
     loadMessages,
     setActiveSession,
     deleteConversation,
+    updateConversationProject,
   } = useChat();
 
   const {
@@ -64,12 +65,6 @@ const ChatInterface: React.FC = () => {
   const handleSelectConversation = (conversationId: string) => {
     // Set active session and ensure messages are loaded
     setActiveSession(conversationId);
-    
-    // Force reload messages to ensure they're fresh
-    const session = sessions.find(s => s.conversation.id === conversationId);
-    if (session) {
-      loadMessages(conversationId);
-    }
   };
 
   const handleDeleteConversation = (conversationId: string) => {
@@ -83,13 +78,17 @@ const ChatInterface: React.FC = () => {
         await sendMessage(newSession.conversation.id, content, selectedProvider, selectedModel, documentIds, true);
       }
     } else {
-      await sendMessage(activeSession.conversation.id, content, selectedProvider, selectedModel, documentIds, true);
+      await sendMessage(activeSession.conversation.id, content,  selectedProvider, selectedModel, documentIds, true);
     }
   };
 
   const handleModelSelect = (model: string, provider: string) => {
     setSelectedModel(model);
     setSelectedProvider(provider);
+  };
+
+  const handleConversationMoved = (conversationId: string, projectId: string | null) => {
+    updateConversationProject(conversationId, projectId);
   };
 
   // Show loading state while API access data is being fetched
@@ -123,6 +122,7 @@ const ChatInterface: React.FC = () => {
             onDeleteConversation={handleDeleteConversation}
             onToggleSidebar={toggleSidebar}
             isLoading={isLoading}
+            onConversationMoved={handleConversationMoved}
           />
         </div>
       </div>

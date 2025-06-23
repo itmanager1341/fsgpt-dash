@@ -153,7 +153,6 @@ export const useChat = () => {
       localId: `temp-user-${Date.now()}`,
     };
 
-    // Create streaming assistant message placeholder
     const streamingMessage: MessageWithLoading = {
       id: `temp-assistant-${Date.now()}`,
       conversation_id: conversationId,
@@ -177,7 +176,6 @@ export const useChat = () => {
         return;
       }
 
-      // Update both sessions and activeSession with optimistic user message
       setSessions(prev => {
         const updated = prev.map(session => 
           session.conversation.id === conversationId
@@ -192,7 +190,6 @@ export const useChat = () => {
         return updated;
       });
 
-      // Add streaming message placeholder if streaming is enabled
       if (enableStreaming) {
         setSessions(prev => {
           const updated = prev.map(session => 
@@ -215,7 +212,7 @@ export const useChat = () => {
           provider,
           model,
           stream: enableStreaming,
-          documentIds, // Pass document IDs separately
+          documentIds,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -228,7 +225,6 @@ export const useChat = () => {
 
       const { userMessage, assistantMessage } = response.data;
 
-      // Convert database messages to MessageWithLoading format
       const convertedUserMessage: MessageWithLoading = {
         ...userMessage,
         metadata: (userMessage.metadata as Record<string, any>) || {},
@@ -241,14 +237,12 @@ export const useChat = () => {
         created_at: assistantMessage.created_at,
       };
 
-      // Replace optimistic and streaming messages with real messages
       setSessions(prev => {
         const updated = prev.map(session => 
           session.conversation.id === conversationId
             ? {
                 ...session,
                 messages: [
-                  // Keep all messages except the ones we're replacing
                   ...session.messages.filter(m => 
                     m.localId !== optimisticMessage.localId && 
                     m.localId !== streamingMessage.localId
@@ -268,7 +262,6 @@ export const useChat = () => {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
       
-      // Remove optimistic and streaming messages on error
       setSessions(prev => {
         const updated = prev.map(session => 
           session.conversation.id === conversationId
@@ -334,7 +327,6 @@ export const useChat = () => {
 
       console.log('Loaded messages:', messages?.length || 0);
 
-      // Convert database messages to MessageWithLoading format
       const convertedMessages: MessageWithLoading[] = (messages || []).map(msg => ({
         ...msg,
         role: msg.role as 'user' | 'assistant' | 'system',
@@ -358,15 +350,32 @@ export const useChat = () => {
     }
   }, [syncActiveSession]);
 
+  // Update conversation project_id locally when moved
+  const updateConversationProject = useCallback((conversationId: string, projectId: string | null) => {
+    setSessions(prev => {
+      const updated = prev.map(session => 
+        session.conversation.id === conversationId
+          ? {
+              ...session,
+              conversation: {
+                ...session.conversation,
+                project_id: projectId,
+              }
+            }
+          : session
+      );
+      syncActiveSession(updated);
+      return updated;
+    });
+  }, [syncActiveSession]);
+
   const setActiveSessionById = useCallback((conversationId: string) => {
     console.log('Setting active session:', conversationId);
     const session = sessions.find(s => s.conversation.id === conversationId);
     if (session) {
       setActiveSession(session);
-      // Ensure messages are loaded when setting active session
-      if (session.messages.length === 0) {
-        loadMessages(conversationId);
-      }
+      // Always load messages when setting active session to ensure they're fresh
+      loadMessages(conversationId);
     }
   }, [sessions, loadMessages]);
 
@@ -380,5 +389,6 @@ export const useChat = () => {
     loadMessages,
     setActiveSession: setActiveSessionById,
     deleteConversation,
+    updateConversationProject,
   };
 };

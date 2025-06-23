@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { ChatSession } from '@/types/frontend';
 import { ProjectWithConversations } from '@/types/projects';
@@ -42,6 +43,7 @@ interface ProjectSidebarProps {
   onDeleteConversation: (conversationId: string) => void;
   onToggleSidebar: () => void;
   isLoading: boolean;
+  onConversationMoved?: (conversationId: string, projectId: string | null) => void;
 }
 
 const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
@@ -52,6 +54,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onDeleteConversation,
   onToggleSidebar,
   isLoading,
+  onConversationMoved,
 }) => {
   const { 
     projectsWithConversations, 
@@ -72,12 +75,12 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     handleDragLeave,
   } = useDragAndDrop();
 
-  // Get conversations not assigned to any project
+  // Get conversations not assigned to any project by checking sessions data
   const unassignedConversations = sessions.filter(session => 
     !session.conversation.project_id
   );
 
-  // Helper function to get current project ID for a conversation
+  // Helper function to get current project ID for a conversation from sessions
   const getCurrentProjectId = (conversationId: string): string | null => {
     const session = sessions.find(s => s.conversation.id === conversationId);
     return session?.conversation.project_id || null;
@@ -114,10 +117,23 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       return; // No change needed, don't show success message
     }
     
-    await assignConversationToProject.mutateAsync({
-      conversationId,
-      projectId,
-    });
+    // Optimistic update
+    if (onConversationMoved) {
+      onConversationMoved(conversationId, projectId);
+    }
+    
+    try {
+      await assignConversationToProject.mutateAsync({
+        conversationId,
+        projectId,
+      });
+    } catch (error) {
+      // Revert optimistic update on error
+      if (onConversationMoved) {
+        onConversationMoved(conversationId, currentProjectId);
+      }
+      throw error;
+    }
   };
 
   const handleDrop = async (e: React.DragEvent, projectId: string | null) => {
@@ -144,9 +160,15 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     return session.conversation.title;
   };
 
+  // Get conversations for a specific project from sessions data
+  const getProjectConversations = (projectId: string) => {
+    return sessions.filter(session => session.conversation.project_id === projectId);
+  };
+
   const renderProject = (project: ProjectWithConversations, level = 0) => {
     const isExpanded = expandedProjects.has(project.id);
-    const hasConversations = project.conversations.length > 0;
+    const projectConversations = getProjectConversations(project.id);
+    const hasConversations = projectConversations.length > 0;
     const hasSubprojects = project.subprojects && project.subprojects.length > 0;
     const isDropTarget = dragState.dragOverTarget === project.id;
     
@@ -174,6 +196,9 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             )}
             {isExpanded ? <FolderOpen size={16} className="text-muted-foreground" /> : <Folder size={16} className="text-muted-foreground" />}
             <span className="text-sm truncate">{project.name}</span>
+            {hasConversations && (
+              <span className="text-xs text-muted-foreground">({projectConversations.length})</span>
+            )}
           </div>
           
           <DropdownMenu>
@@ -208,35 +233,30 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             )}
             
             {/* Conversations */}
-            {project.conversations.map(conv => {
-              const session = sessions.find(s => s.conversation.id === conv.id);
-              if (!session) return null;
-              
-              return (
-                <ConversationContextMenu
-                  key={conv.id}
-                  session={session}
-                  projects={projectsWithConversations}
-                  onMoveToProject={handleMoveToProject}
-                  onDeleteConversation={onDeleteConversation}
+            {projectConversations.map(session => (
+              <ConversationContextMenu
+                key={session.conversation.id}
+                session={session}
+                projects={projectsWithConversations}
+                onMoveToProject={handleMoveToProject}
+                onDeleteConversation={onDeleteConversation}
+              >
+                <div
+                  className={cn(
+                    "flex items-center gap-2 px-2 py-1.5 ml-4 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
+                    activeSession?.conversation.id === session.conversation.id && "bg-accent",
+                    dragState.draggedItemId === session.conversation.id && "opacity-50"
+                  )}
+                  draggable
+                  onDragStart={() => handleDragStart(session.conversation.id)}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => onSelectConversation(session.conversation.id)}
                 >
-                  <div
-                    className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 ml-4 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
-                      activeSession?.conversation.id === conv.id && "bg-accent",
-                      dragState.draggedItemId === conv.id && "opacity-50"
-                    )}
-                    draggable
-                    onDragStart={() => handleDragStart(conv.id)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => onSelectConversation(conv.id)}
-                  >
-                    <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
-                    <span className="truncate flex-1">{getDisplayTitle(session)}</span>
-                  </div>
-                </ConversationContextMenu>
-              );
-            })}
+                  <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
+                  <span className="truncate flex-1">{getDisplayTitle(session)}</span>
+                </div>
+              </ConversationContextMenu>
+            ))}
           </div>
         )}
       </div>
@@ -295,7 +315,10 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, null)}
                 >
-                  <div className="text-xs text-muted-foreground mb-2 px-2">Unassigned</div>
+                  <div className="text-xs text-muted-foreground mb-2 px-2 flex items-center justify-between">
+                    <span>Unassigned</span>
+                    <span>({unassignedConversations.length})</span>
+                  </div>
                   {unassignedConversations.map(session => (
                     <ConversationContextMenu
                       key={session.conversation.id}

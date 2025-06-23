@@ -28,11 +28,12 @@ import {
   MoreHorizontal,
   Trash,
   Edit,
-  Menu,
   PanelLeftClose
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
+import { useDragAndDrop } from '@/hooks/useDragAndDrop';
+import ConversationContextMenu from './ConversationContextMenu';
 
 interface ProjectSidebarProps {
   sessions: ChatSession[];
@@ -64,6 +65,14 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const [createProjectDialog, setCreateProjectDialog] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
 
+  const {
+    dragState,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleDragLeave,
+  } = useDragAndDrop();
+
   // Get conversations not assigned to any project
   const unassignedConversations = sessions.filter(session => 
     !session.conversation.project_id
@@ -92,6 +101,21 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     setCreateProjectDialog(false);
   };
 
+  const handleMoveToProject = async (conversationId: string, projectId: string | null) => {
+    await assignConversationToProject.mutateAsync({
+      conversationId,
+      projectId,
+    });
+  };
+
+  const handleDrop = async (e: React.DragEvent, projectId: string | null) => {
+    e.preventDefault();
+    if (dragState.draggedItemId) {
+      await handleMoveToProject(dragState.draggedItemId, projectId);
+    }
+    handleDragEnd();
+  };
+
   const getDisplayTitle = (session: ChatSession) => {
     if (session.conversation.title === 'New Conversation' && session.messages.length > 0) {
       const firstUserMessage = session.messages.find(m => m.role === 'user');
@@ -107,11 +131,23 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     const isExpanded = expandedProjects.has(project.id);
     const hasConversations = project.conversations.length > 0;
     const hasSubprojects = project.subprojects && project.subprojects.length > 0;
+    const isDropTarget = dragState.dragOverTarget === project.id;
     
     return (
       <div key={project.id} className={cn("select-none", level > 0 && "ml-3")}>
         {/* Project Header */}
-        <div className="flex items-center justify-between group rounded-lg hover:bg-muted/50 px-2 py-1.5">
+        <div 
+          className={cn(
+            "flex items-center justify-between group rounded-lg hover:bg-muted/50 px-2 py-1.5 transition-colors",
+            isDropTarget && "bg-accent/50 ring-2 ring-primary/20"
+          )}
+          onDragOver={(e) => {
+            e.preventDefault();
+            handleDragOver(project.id);
+          }}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, project.id)}
+        >
           <div 
             className="flex items-center gap-2 flex-1 cursor-pointer"
             onClick={() => toggleProjectExpansion(project.id)}
@@ -160,17 +196,28 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               if (!session) return null;
               
               return (
-                <div
+                <ConversationContextMenu
                   key={conv.id}
-                  className={cn(
-                    "flex items-center gap-2 px-2 py-1.5 ml-4 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
-                    activeSession?.conversation.id === conv.id && "bg-accent"
-                  )}
-                  onClick={() => onSelectConversation(conv.id)}
+                  session={session}
+                  projects={projectsWithConversations}
+                  onMoveToProject={handleMoveToProject}
+                  onDeleteConversation={onDeleteConversation}
                 >
-                  <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
-                  <span className="truncate flex-1">{getDisplayTitle(session)}</span>
-                </div>
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 ml-4 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
+                      activeSession?.conversation.id === conv.id && "bg-accent",
+                      dragState.draggedItemId === conv.id && "opacity-50"
+                    )}
+                    draggable
+                    onDragStart={() => handleDragStart(conv.id)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => onSelectConversation(conv.id)}
+                  >
+                    <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
+                    <span className="truncate flex-1">{getDisplayTitle(session)}</span>
+                  </div>
+                </ConversationContextMenu>
               );
             })}
           </div>
@@ -219,19 +266,42 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               
               {/* Unassigned Conversations */}
               {unassignedConversations.length > 0 && (
-                <div className="mt-4">
+                <div 
+                  className={cn(
+                    "mt-4 p-2 rounded-lg transition-colors",
+                    dragState.dragOverTarget === 'unassigned' && "bg-accent/50 ring-2 ring-primary/20"
+                  )}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    handleDragOver('unassigned');
+                  }}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, null)}
+                >
+                  <div className="text-xs text-muted-foreground mb-2 px-2">Unassigned</div>
                   {unassignedConversations.map(session => (
-                    <div
+                    <ConversationContextMenu
                       key={session.conversation.id}
-                      className={cn(
-                        "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
-                        activeSession?.conversation.id === session.conversation.id && "bg-accent"
-                      )}
-                      onClick={() => onSelectConversation(session.conversation.id)}
+                      session={session}
+                      projects={projectsWithConversations}
+                      onMoveToProject={handleMoveToProject}
+                      onDeleteConversation={onDeleteConversation}
                     >
-                      <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
-                      <span className="truncate flex-1">{getDisplayTitle(session)}</span>
-                    </div>
+                      <div
+                        className={cn(
+                          "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm hover:bg-muted/50 transition-colors",
+                          activeSession?.conversation.id === session.conversation.id && "bg-accent",
+                          dragState.draggedItemId === session.conversation.id && "opacity-50"
+                        )}
+                        draggable
+                        onDragStart={() => handleDragStart(session.conversation.id)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => onSelectConversation(session.conversation.id)}
+                      >
+                        <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
+                        <span className="truncate flex-1">{getDisplayTitle(session)}</span>
+                      </div>
+                    </ConversationContextMenu>
                   ))}
                 </div>
               )}

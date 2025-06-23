@@ -16,6 +16,48 @@ interface SendMessageRequest {
   documentIds?: string[];
 }
 
+// Helper function to validate and fix message sequence for Perplexity
+function prepareMessagesForPerplexity(messages: Array<{role: string, content: string}>) {
+  console.log('Original messages for Perplexity:', messages.length);
+  
+  // Separate system messages from conversation messages
+  const systemMessages = messages.filter(msg => msg.role === 'system');
+  const conversationMessages = messages.filter(msg => msg.role !== 'system');
+  
+  console.log('System messages:', systemMessages.length, 'Conversation messages:', conversationMessages.length);
+  
+  // Ensure alternating pattern starting with user message
+  const validatedMessages = [];
+  let expectedRole = 'user';
+  
+  for (const msg of conversationMessages) {
+    if (msg.role === expectedRole) {
+      validatedMessages.push(msg);
+      expectedRole = expectedRole === 'user' ? 'assistant' : 'user';
+    } else if (msg.role === 'user' && expectedRole === 'assistant') {
+      // Skip this user message if we're expecting assistant (avoid consecutive user messages)
+      console.log('Skipping user message to maintain alternation');
+      continue;
+    } else if (msg.role === 'assistant' && expectedRole === 'user') {
+      // Skip this assistant message if we're expecting user (avoid consecutive assistant messages)
+      console.log('Skipping assistant message to maintain alternation');
+      continue;
+    }
+  }
+  
+  // Ensure we end with a user message (required by Perplexity)
+  if (validatedMessages.length > 0 && validatedMessages[validatedMessages.length - 1].role !== 'user') {
+    console.log('Last message is not user, removing last assistant message');
+    validatedMessages.pop();
+  }
+  
+  // Combine system messages + validated conversation messages
+  const finalMessages = [...systemMessages, ...validatedMessages];
+  console.log('Final messages for Perplexity:', finalMessages.length);
+  
+  return finalMessages;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -255,7 +297,20 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
     // Add current message (already clean)
     contextMessages.push({ role: 'user', content: message });
 
-    console.log(`Calling ${provider} API with ${contextMessages.length} messages (including ${documentContext.length} chars of document context)`);
+    // Apply provider-specific message preparation
+    let finalMessages = contextMessages;
+    if (provider === 'perplexity') {
+      console.log('Applying Perplexity-specific message validation...');
+      finalMessages = prepareMessagesForPerplexity(contextMessages);
+      
+      // Final validation - ensure we have at least one user message
+      if (finalMessages.length === 0 || finalMessages.every(msg => msg.role === 'system')) {
+        console.log('No valid conversation messages for Perplexity, adding current user message');
+        finalMessages.push({ role: 'user', content: message });
+      }
+    }
+
+    console.log(`Calling ${provider} API with ${finalMessages.length} messages (including ${documentContext.length} chars of document context)`);
 
     // Call LLM API
     const llmResponse = await fetch(apiUrl, {
@@ -266,7 +321,7 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
       },
       body: JSON.stringify({
         model,
-        messages: contextMessages,
+        messages: finalMessages,
         max_tokens: 4000, // Increased for comprehensive responses
         temperature: 0.7,
         stream,
@@ -276,7 +331,7 @@ Please provide thorough, detailed analysis based on the COMPLETE document conten
     if (!llmResponse.ok) {
       const errorText = await llmResponse.text()
       console.error(`${provider} API error:`, errorText)
-      throw new Error(`${provider} API error: ${llmResponse.statusText}`)
+      throw new Error(`${provider} API error: ${llmResponse.statusText} - ${errorText}`)
     }
 
     let assistantMessage: string;

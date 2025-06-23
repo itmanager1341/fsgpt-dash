@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatSession, MessageWithLoading } from '@/types/frontend';
@@ -321,6 +322,8 @@ export const useChat = () => {
 
   const loadMessages = useCallback(async (conversationId: string) => {
     try {
+      console.log('Loading messages for conversation:', conversationId);
+      
       const { data: messages, error } = await supabase
         .from('messages')
         .select('*')
@@ -328,6 +331,8 @@ export const useChat = () => {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
+
+      console.log('Loaded messages:', messages?.length || 0);
 
       // Convert database messages to MessageWithLoading format
       const convertedMessages: MessageWithLoading[] = (messages || []).map(msg => ({
@@ -354,11 +359,16 @@ export const useChat = () => {
   }, [syncActiveSession]);
 
   const setActiveSessionById = useCallback((conversationId: string) => {
+    console.log('Setting active session:', conversationId);
     const session = sessions.find(s => s.conversation.id === conversationId);
     if (session) {
       setActiveSession(session);
+      // Ensure messages are loaded when setting active session
+      if (session.messages.length === 0) {
+        loadMessages(conversationId);
+      }
     }
-  }, [sessions]);
+  }, [sessions, loadMessages]);
 
   return {
     sessions,

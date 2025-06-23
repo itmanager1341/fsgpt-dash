@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ChatSession } from '@/types/frontend';
 import { ProjectWithConversations } from '@/types/projects';
@@ -78,6 +77,12 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     !session.conversation.project_id
   );
 
+  // Helper function to get current project ID for a conversation
+  const getCurrentProjectId = (conversationId: string): string | null => {
+    const session = sessions.find(s => s.conversation.id === conversationId);
+    return session?.conversation.project_id || null;
+  };
+
   const toggleProjectExpansion = (projectId: string) => {
     const newExpanded = new Set(expandedProjects);
     if (newExpanded.has(projectId)) {
@@ -102,6 +107,13 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   };
 
   const handleMoveToProject = async (conversationId: string, projectId: string | null) => {
+    const currentProjectId = getCurrentProjectId(conversationId);
+    
+    // Only proceed if actually moving to a different project
+    if (currentProjectId === projectId) {
+      return; // No change needed, don't show success message
+    }
+    
     await assignConversationToProject.mutateAsync({
       conversationId,
       projectId,
@@ -111,7 +123,12 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const handleDrop = async (e: React.DragEvent, projectId: string | null) => {
     e.preventDefault();
     if (dragState.draggedItemId) {
-      await handleMoveToProject(dragState.draggedItemId, projectId);
+      const currentProjectId = getCurrentProjectId(dragState.draggedItemId);
+      
+      // Only move if it's actually a different project
+      if (currentProjectId !== projectId) {
+        await handleMoveToProject(dragState.draggedItemId, projectId);
+      }
     }
     handleDragEnd();
   };

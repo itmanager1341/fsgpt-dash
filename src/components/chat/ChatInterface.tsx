@@ -37,10 +37,14 @@ const ChatInterface: React.FC = () => {
   }, [loadConversations]);
 
   useEffect(() => {
-    if (activeSession && activeSession.messages.length === 0) {
-      loadMessages(activeSession.conversation.id);
+    if (activeSession) {
+      // Always try to load messages when a session becomes active
+      // Check if messages are empty or if we need to refresh
+      if (activeSession.messages.length === 0) {
+        loadMessages(activeSession.conversation.id);
+      }
     }
-  }, [activeSession, loadMessages]);
+  }, [activeSession?.conversation.id, loadMessages]);
 
   // Update selected model when modelAccess data is loaded
   useEffect(() => {
@@ -58,7 +62,14 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSelectConversation = (conversationId: string) => {
+    // Set active session and ensure messages are loaded
     setActiveSession(conversationId);
+    
+    // Force reload messages to ensure they're fresh
+    const session = sessions.find(s => s.conversation.id === conversationId);
+    if (session) {
+      loadMessages(conversationId);
+    }
   };
 
   const handleDeleteConversation = (conversationId: string) => {

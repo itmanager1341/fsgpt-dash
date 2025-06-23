@@ -155,8 +155,12 @@ export const useProjects = () => {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Invalidate all related queries to ensure proper state sync
       queryClient.invalidateQueries({ queryKey: ['projects-with-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['knowledge-items'] });
+      // Also invalidate conversations to update the chat list
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
       toast.success('Conversation moved successfully');
     },
     onError: (error) => {

@@ -48,6 +48,34 @@ const FSGKnowledgeSidebar = ({
     return colorMap[categoryName as keyof typeof colorMap] || 'text-gray-500';
   };
 
+  // Create the main category mappings
+  const mainCategoryMappings = [
+    {
+      id: 'company_resources',
+      name: 'Company Resources',
+      icon: 'building',
+      description: 'Shared company-wide resources and documents'
+    },
+    {
+      id: 'department_library', 
+      name: 'Department Libraries',
+      icon: 'users',
+      description: 'Department-specific knowledge and resources'
+    },
+    {
+      id: 'project_workspace',
+      name: 'Project Workspaces', 
+      icon: 'folder',
+      description: 'Project-specific files and collaboration'
+    },
+    {
+      id: 'personal_collection',
+      name: 'Personal Collections',
+      icon: 'user', 
+      description: 'Your personal knowledge items and files'
+    }
+  ];
+
   const mainCategories = categories.filter(cat => !cat.parent_category);
   const subCategories = categories.filter(cat => cat.parent_category);
 
@@ -64,40 +92,47 @@ const FSGKnowledgeSidebar = ({
       <div className="p-4">
         <h3 className="text-sm font-semibold text-muted-foreground mb-4">FSG KNOWLEDGE HUB</h3>
         
-        {mainCategories.map((category) => {
-          const categoryKey = category.name.toLowerCase().replace(/\s+/g, '_');
-          const IconComponent = getIconComponent(category.icon);
-          const relatedSubcategories = subCategories.filter(sub => sub.parent_category === category.name);
+        {/* Main Categories - using our predefined structure */}
+        {mainCategoryMappings.map((categoryMapping) => {
+          const IconComponent = getIconComponent(categoryMapping.icon);
+          const isSelected = selectedCategoryId === categoryMapping.id && !selectedSubcategoryId;
+          
+          // Get subcategories for department_library 
+          const relatedSubcategories = categoryMapping.id === 'department_library' 
+            ? subCategories.filter(sub => sub.parent_category === 'Department Libraries')
+            : [];
           
           return (
-            <div key={category.id} className="mb-6">
+            <div key={categoryMapping.id} className="mb-6">
               <div 
                 className={cn(
                   "flex items-center justify-between px-3 py-2 text-sm font-medium cursor-pointer rounded-lg transition-colors",
-                  selectedCategoryId === categoryKey && !selectedSubcategoryId 
+                  isSelected
                     ? "bg-primary/10 text-primary" 
                     : "hover:bg-muted/50 text-foreground/80"
                 )}
-                onClick={() => handleCategoryClick(categoryKey)}
+                onClick={() => handleCategoryClick(categoryMapping.id)}
               >
                 <div className="flex items-center gap-3">
-                  <IconComponent size={16} className={getColorClass(category.name)} />
-                  <span>{category.name}</span>
+                  <IconComponent size={16} className={getColorClass(categoryMapping.name)} />
+                  <span>{categoryMapping.name}</span>
                 </div>
               </div>
               
+              {/* Show subcategories for Department Libraries */}
               {relatedSubcategories.length > 0 && (
                 <div className="mt-2 ml-6">
                   {relatedSubcategories.map((subcategory) => {
                     const subcategoryKey = subcategory.name.toLowerCase();
                     const SubIconComponent = getIconComponent(subcategory.icon);
+                    const isSubSelected = selectedCategoryId === 'department_library' && selectedSubcategoryId === subcategoryKey;
                     
                     return (
                       <div 
                         key={subcategory.id}
                         className={cn(
                           "flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg transition-colors",
-                          selectedCategoryId === 'department_library' && selectedSubcategoryId === subcategoryKey
+                          isSubSelected
                             ? "bg-primary/10 text-primary" 
                             : "hover:bg-muted/30 text-foreground/70"
                         )}

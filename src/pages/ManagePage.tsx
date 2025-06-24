@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AnimatedTransition } from '@/components/AnimatedTransition';
 import { useAnimateIn } from '@/lib/animations';
@@ -20,8 +19,8 @@ const ManagePage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('personal_collection');
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>('overview');
+  const [selectedCategory, setSelectedCategory] = useState('personal_collection'); // Default to personal collection
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null); // Start with null instead of 'overview'
 
   const handleEditClick = () => {
     setTempTitle(libraryTitle);

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Search, Filter, Plus, Move, FileText, Presentation, Mic, FileCheck, BarChart, FileAudio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,8 @@ import { useKnowledgeItems, KnowledgeItem } from '@/hooks/useKnowledgeItems';
 import { formatDistanceToNow } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AudioUploadDialog from './AudioUploadDialog';
+import KnowledgeItemDetailPane from './KnowledgeItemDetailPane';
+import { cn } from '@/lib/utils';
 
 interface FSGKnowledgeTableProps {
   categoryId?: string;
@@ -42,13 +45,18 @@ const FSGKnowledgeTable = ({
 }: FSGKnowledgeTableProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [audioUploadDialogOpen, setAudioUploadDialogOpen] = useState(false);
   const [targetCategory, setTargetCategory] = useState<string>('');
   
+  // Fix category filtering - ensure we get the right items
+  const actualCategoryId = categoryId === 'overview' ? undefined : categoryId;
+  const actualSubcategoryId = subcategoryId === 'overview' ? undefined : subcategoryId;
+  
   const { data: knowledgeItems = [], isLoading } = useKnowledgeItems(
-    categoryId !== 'overview' ? categoryId : undefined,
-    subcategoryId !== 'overview' ? subcategoryId : undefined
+    actualCategoryId,
+    actualSubcategoryId
   );
 
   const getContentTypeIcon = (contentType: string) => {
@@ -88,6 +96,7 @@ const FSGKnowledgeTable = ({
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.department?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.transcript_text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : knowledgeItems;
@@ -100,6 +109,10 @@ const FSGKnowledgeTable = ({
         return [...prev, id];
       }
     });
+  };
+
+  const handleRowClick = (item: KnowledgeItem) => {
+    setSelectedItem(item);
   };
 
   const handleMoveItems = () => {
@@ -176,101 +189,125 @@ const FSGKnowledgeTable = ({
         </div>
       </div>
       
-      <div className="flex-1 overflow-auto">
-        {filteredItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <FileText size={48} className="mb-4 opacity-50" />
-            <p className="text-lg font-medium mb-2">No knowledge items found</p>
-            <p>Add documents, presentations, or other resources to get started.</p>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12"></TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Classification</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredItems.map((item) => {
-                const ContentIcon = getContentTypeIcon(item.content_type);
-                return (
-                  <TableRow 
-                    key={item.id}
-                    className={selectedItems.includes(item.id) ? "bg-muted/50" : ""}
-                  >
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        checked={selectedItems.includes(item.id)}
-                        onChange={() => handleSelectItem(item.id)}
-                        className="rounded"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <ContentIcon size={16} className="text-muted-foreground" />
-                        <div>
-                          <div className="font-medium">{item.title}</div>
-                          {item.description && (
-                            <div className="text-sm text-muted-foreground line-clamp-1">
-                              {item.description}
-                            </div>
-                          )}
-                          {item.tags && item.tags.length > 0 && (
-                            <div className="flex gap-1 mt-1">
-                              {item.tags.slice(0, 3).map((tag, index) => (
-                                <Badge key={index} variant="secondary" className="text-xs">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {item.content_type.replace('_', ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {item.department && (
-                        <Badge variant="secondary" className="capitalize">
-                          {item.department}
-                        </Badge>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Main content area */}
+        <div className="flex-1 overflow-auto">
+          {filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <FileText size={48} className="mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-2">No knowledge items found</p>
+              <p>Add documents, presentations, or other resources to get started.</p>
+              {categoryId !== 'personal_collection' && (
+                <p className="text-sm mt-2">
+                  Items uploaded will appear in "{categoryId?.replace('_', ' ')}" by default.
+                </p>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12"></TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Classification</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredItems.map((item) => {
+                  const ContentIcon = getContentTypeIcon(item.content_type);
+                  const isSelected = selectedItems.includes(item.id);
+                  const isDetailSelected = selectedItem?.id === item.id;
+                  
+                  return (
+                    <TableRow 
+                      key={item.id}
+                      className={cn(
+                        "cursor-pointer",
+                        isSelected && "bg-muted/50",
+                        isDetailSelected && "bg-primary/10 border-primary/20"
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getClassificationColor(item.classification_level)}>
-                        {item.classification_level}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getProcessingStatusColor(item.processing_status)}>
-                        {item.processing_status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      onClick={() => handleRowClick(item)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleSelectItem(item.id)}
+                          className="rounded"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <ContentIcon size={16} className="text-muted-foreground" />
+                          <div>
+                            <div className="font-medium">{item.title}</div>
+                            {item.description && (
+                              <div className="text-sm text-muted-foreground line-clamp-1">
+                                {item.description}
+                              </div>
+                            )}
+                            {item.tags && item.tags.length > 0 && (
+                              <div className="flex gap-1 mt-1">
+                                {item.tags.slice(0, 3).map((tag, index) => (
+                                  <Badge key={index} variant="secondary" className="text-xs">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {item.content_type.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.department && (
+                          <Badge variant="secondary" className="capitalize">
+                            {item.department}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getClassificationColor(item.classification_level)}>
+                          {item.classification_level}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getProcessingStatusColor(item.processing_status)}>
+                          {item.processing_status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+
+        {/* Detail pane */}
+        {selectedItem && (
+          <KnowledgeItemDetailPane
+            item={selectedItem}
+            onClose={() => setSelectedItem(null)}
+          />
         )}
       </div>
 
       <AudioUploadDialog
         open={audioUploadDialogOpen}
         onOpenChange={setAudioUploadDialogOpen}
-        categoryId={categoryId !== 'overview' ? categoryId : undefined}
+        categoryId={actualCategoryId}
       />
 
       <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>

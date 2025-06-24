@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -7,7 +6,7 @@ export interface KnowledgeItem {
   user_id: string;
   title: string;
   description?: string;
-  content_type: 'document' | 'presentation' | 'recording' | 'template' | 'guideline' | 'report';
+  content_type: 'document' | 'presentation' | 'recording' | 'template' | 'guideline' | 'report' | 'audio';
   category: 'company_resources' | 'department_library' | 'project_workspace' | 'personal_collection';
   subcategory?: string;
   file_path?: string;
@@ -25,6 +24,12 @@ export interface KnowledgeItem {
   last_accessed_at?: string;
   created_at: string;
   updated_at: string;
+  // Audio-specific fields
+  audio_duration_seconds?: number;
+  transcript_text?: string;
+  speaker_count?: number;
+  processing_cost?: number;
+  audio_metadata?: Record<string, any>;
 }
 
 export interface KnowledgeCategory {

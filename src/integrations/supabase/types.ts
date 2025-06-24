@@ -821,6 +821,8 @@ export type Database = {
         Row: {
           ai_keywords: Json | null
           ai_summary: string | null
+          audio_duration_seconds: number | null
+          audio_metadata: Json | null
           category: string
           classification_level: string
           client_reference: string | null
@@ -833,11 +835,14 @@ export type Database = {
           id: string
           last_accessed_at: string | null
           metadata: Json | null
+          processing_cost: number | null
           processing_status: string | null
           project_code: string | null
+          speaker_count: number | null
           subcategory: string | null
           tags: string[] | null
           title: string
+          transcript_text: string | null
           updated_at: string
           user_id: string
           view_count: number | null
@@ -845,6 +850,8 @@ export type Database = {
         Insert: {
           ai_keywords?: Json | null
           ai_summary?: string | null
+          audio_duration_seconds?: number | null
+          audio_metadata?: Json | null
           category: string
           classification_level?: string
           client_reference?: string | null
@@ -857,11 +864,14 @@ export type Database = {
           id?: string
           last_accessed_at?: string | null
           metadata?: Json | null
+          processing_cost?: number | null
           processing_status?: string | null
           project_code?: string | null
+          speaker_count?: number | null
           subcategory?: string | null
           tags?: string[] | null
           title: string
+          transcript_text?: string | null
           updated_at?: string
           user_id: string
           view_count?: number | null
@@ -869,6 +879,8 @@ export type Database = {
         Update: {
           ai_keywords?: Json | null
           ai_summary?: string | null
+          audio_duration_seconds?: number | null
+          audio_metadata?: Json | null
           category?: string
           classification_level?: string
           client_reference?: string | null
@@ -881,11 +893,14 @@ export type Database = {
           id?: string
           last_accessed_at?: string | null
           metadata?: Json | null
+          processing_cost?: number | null
           processing_status?: string | null
           project_code?: string | null
+          speaker_count?: number | null
           subcategory?: string | null
           tags?: string[] | null
           title?: string
+          transcript_text?: string | null
           updated_at?: string
           user_id?: string
           view_count?: number | null

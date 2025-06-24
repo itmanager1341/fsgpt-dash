@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Plus, Move, FileText, Presentation, Mic, FileCheck, BarChart } from 'lucide-react';
+import { Search, Filter, Plus, Move, FileText, Presentation, Mic, FileCheck, BarChart, FileAudio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,8 @@ import {
 import { toast } from 'sonner';
 import { useKnowledgeItems, KnowledgeItem } from '@/hooks/useKnowledgeItems';
 import { formatDistanceToNow } from 'date-fns';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import AudioUploadDialog from './AudioUploadDialog';
 
 interface FSGKnowledgeTableProps {
   categoryId?: string;
@@ -41,6 +43,7 @@ const FSGKnowledgeTable = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [audioUploadDialogOpen, setAudioUploadDialogOpen] = useState(false);
   const [targetCategory, setTargetCategory] = useState<string>('');
   
   const { data: knowledgeItems = [], isLoading } = useKnowledgeItems(
@@ -56,6 +59,7 @@ const FSGKnowledgeTable = ({
       'template': FileCheck,
       'guideline': FileCheck,
       'report': BarChart,
+      'audio': FileAudio,
     };
     return iconMap[contentType as keyof typeof iconMap] || FileText;
   };
@@ -147,10 +151,28 @@ const FSGKnowledgeTable = ({
             <Filter size={16} className="mr-2" />
             Filter
           </Button>
-          <Button size="sm">
-            <Plus size={16} className="mr-2" />
-            Add Item
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm">
+                <Plus size={16} className="mr-2" />
+                Add Item
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setAudioUploadDialogOpen(true)}>
+                <FileAudio size={16} className="mr-2" />
+                Upload Audio
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <FileText size={16} className="mr-2" />
+                Upload Document
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Presentation size={16} className="mr-2" />
+                Upload Presentation
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       
@@ -244,6 +266,12 @@ const FSGKnowledgeTable = ({
           </Table>
         )}
       </div>
+
+      <AudioUploadDialog
+        open={audioUploadDialogOpen}
+        onOpenChange={setAudioUploadDialogOpen}
+        categoryId={categoryId !== 'overview' ? categoryId : undefined}
+      />
 
       <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
         <DialogContent className="sm:max-w-md">

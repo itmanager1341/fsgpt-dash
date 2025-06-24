@@ -116,17 +116,27 @@ const AudioUploadDialog = ({ open, onOpenChange, categoryId }: AudioUploadDialog
       // Get audio duration
       const duration = await getAudioDuration(file);
       
-      // Upload to storage
+      // Upload to storage - simulate progress since Supabase doesn't support onUploadProgress
       const fileName = `${user.id}/${Date.now()}-${file.name}`;
+      
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('user-audio')
-        .upload(fileName, file, {
-          onUploadProgress: (progress) => {
-            setUploadProgress((progress.loaded / progress.total) * 100);
-          }
-        });
+        .upload(fileName, file);
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
 
       if (uploadError) throw uploadError;
+
+      // Determine category with proper typing
+      const categoryValue = (categoryId && ['company_resources', 'department_library', 'project_workspace', 'personal_collection'].includes(categoryId)) 
+        ? categoryId as 'company_resources' | 'department_library' | 'project_workspace' | 'personal_collection'
+        : 'personal_collection' as const;
 
       // Create knowledge item record
       const knowledgeItem = {
@@ -134,7 +144,7 @@ const AudioUploadDialog = ({ open, onOpenChange, categoryId }: AudioUploadDialog
         title: title.trim(),
         description: description.trim() || undefined,
         content_type: 'audio' as const,
-        category: categoryId || 'personal_collection' as const,
+        category: categoryValue,
         classification_level: classificationLevel,
         department: department || undefined,
         file_path: uploadData.path,
@@ -149,13 +159,13 @@ const AudioUploadDialog = ({ open, onOpenChange, categoryId }: AudioUploadDialog
         tags: []
       };
 
-      await createKnowledgeItem.mutateAsync(knowledgeItem);
+      const createdItem = await createKnowledgeItem.mutateAsync(knowledgeItem);
 
       // Trigger transcription processing
       await supabase.functions.invoke('transcribe-audio', {
         body: { 
           filePath: uploadData.path,
-          knowledgeItemId: knowledgeItem.user_id // Will be updated with actual ID after creation
+          knowledgeItemId: createdItem.id
         }
       });
 

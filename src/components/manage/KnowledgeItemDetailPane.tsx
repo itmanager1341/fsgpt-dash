@@ -1,13 +1,31 @@
-
-import React from 'react';
-import { X, Play, Pause, Download, Edit2, Share2, FileAudio, Clock, User, Calendar } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Play, Pause, Download, Edit2, Share2, FileAudio, Clock, User, Calendar, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KnowledgeItem } from '@/hooks/useKnowledgeItems';
 import { formatDistanceToNow } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+interface SummaryTemplate {
+  id: string;
+  name: string;
+  description: string;
+  prompt_template: string;
+}
+
+interface SummaryRequest {
+  id: string;
+  template_id: string;
+  summary_content: string | null;
+  status: string;
+  created_at: string;
+  template_name?: string;
+}
 
 interface KnowledgeItemDetailPaneProps {
   item: KnowledgeItem | null;
@@ -15,14 +33,191 @@ interface KnowledgeItemDetailPaneProps {
 }
 
 const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps) => {
-  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [summaryTemplates, setSummaryTemplates] = useState<SummaryTemplate[]>([]);
+  const [summaryRequests, setSummaryRequests] = useState<SummaryRequest[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [loadingAudio, setLoadingAudio] = useState(false);
+  
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Load audio URL when item changes
+  useEffect(() => {
+    const loadAudioUrl = async () => {
+      if (!item?.file_path) return;
+      
+      setLoadingAudio(true);
+      try {
+        const { data, error } = await supabase.storage
+          .from('user-audio')
+          .createSignedUrl(item.file_path, 3600); // 1 hour expiry
+        
+        if (error) {
+          console.error('Error creating signed URL:', error);
+          toast.error('Failed to load audio file');
+          return;
+        }
+        
+        setAudioUrl(data.signedUrl);
+      } catch (error) {
+        console.error('Error loading audio:', error);
+        toast.error('Failed to load audio file');
+      } finally {
+        setLoadingAudio(false);
+      }
+    };
+
+    loadAudioUrl();
+  }, [item?.file_path]);
+
+  // Load summary templates and existing summaries
+  useEffect(() => {
+    const loadSummaryData = async () => {
+      if (!item?.id) return;
+
+      // Load summary templates
+      const { data: templates, error: templatesError } = await supabase
+        .from('summary_templates')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+
+      if (templatesError) {
+        console.error('Error loading summary templates:', templatesError);
+      } else {
+        setSummaryTemplates(templates || []);
+      }
+
+      // Load existing summary requests for this item
+      const { data: requests, error: requestsError } = await supabase
+        .from('summary_requests')
+        .select(`
+          *,
+          summary_templates!inner(name)
+        `)
+        .eq('knowledge_item_id', item.id);
+
+      if (requestsError) {
+        console.error('Error loading summary requests:', requestsError);
+      } else {
+        const formattedRequests = requests?.map(req => ({
+          ...req,
+          template_name: req.summary_templates?.name
+        })) || [];
+        setSummaryRequests(formattedRequests);
+      }
+    };
+
+    loadSummaryData();
+  }, [item?.id]);
+
+  // Audio event handlers
+  const handlePlayPause = () => {
+    if (!audioRef.current) return;
+    
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  const generateSummary = async () => {
+    if (!item?.id || !selectedTemplateId || !item.transcript_text) {
+      toast.error('Please select a summary type');
+      return;
+    }
+
+    setIsGeneratingSummary(true);
+    try {
+      // Create summary request record
+      const { data: summaryRequest, error: requestError } = await supabase
+        .from('summary_requests')
+        .insert({
+          knowledge_item_id: item.id,
+          template_id: selectedTemplateId,
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          status: 'processing'
+        })
+        .select()
+        .single();
+
+      if (requestError) {
+        throw requestError;
+      }
+
+      // Call the summary generation edge function
+      const { data, error } = await supabase.functions.invoke('generate-summary', {
+        body: {
+          summaryRequestId: summaryRequest.id,
+          transcript: item.transcript_text,
+          templateId: selectedTemplateId
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Summary generated successfully');
+      
+      // Reload summary requests
+      const { data: updatedRequests, error: reloadError } = await supabase
+        .from('summary_requests')
+        .select(`
+          *,
+          summary_templates!inner(name)
+        `)
+        .eq('knowledge_item_id', item.id);
+
+      if (!reloadError) {
+        const formattedRequests = updatedRequests?.map(req => ({
+          ...req,
+          template_name: req.summary_templates?.name
+        })) || [];
+        setSummaryRequests(formattedRequests);
+      }
+
+      setSelectedTemplateId('');
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      toast.error('Failed to generate summary');
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   if (!item) return null;
 
-  const formatDuration = (seconds?: number) => {
-    if (!seconds) return 'Unknown';
+  const formatDuration = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -79,36 +274,142 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
           </div>
 
           {/* Audio Player & Controls */}
-          {item.content_type === 'audio' && item.file_path && (
+          {item.content_type === 'audio' && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Audio Controls</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setIsPlaying(!isPlaying)}
-                  >
-                    {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-                    <span className="ml-2">{isPlaying ? 'Pause' : 'Play'}</span>
-                  </Button>
-                  <div className="text-sm text-muted-foreground">
-                    {formatDuration(item.audio_duration_seconds)}
+                {loadingAudio ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 size={20} className="animate-spin" />
+                    <span className="ml-2 text-sm">Loading audio...</span>
                   </div>
+                ) : audioUrl ? (
+                  <>
+                    <audio
+                      ref={audioRef}
+                      src={audioUrl}
+                      onTimeUpdate={handleTimeUpdate}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onEnded={() => setIsPlaying(false)}
+                      preload="metadata"
+                    />
+                    
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="outline" 
+                        size="sm"
+                        onClick={handlePlayPause}
+                        disabled={!audioUrl}
+                      >
+                        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                        <span className="ml-2">{isPlaying ? 'Pause' : 'Play'}</span>
+                      </Button>
+                      <div className="text-sm text-muted-foreground">
+                        {formatDuration(currentTime)} / {formatDuration(duration)}
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max={duration || 0}
+                        value={currentTime}
+                        onChange={handleSeek}
+                        className="w-full"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm">
+                        <Download size={14} className="mr-1" />
+                        Download
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        <Share2 size={14} className="mr-1" />
+                        Share
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    Audio file not available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Summary Generation Section */}
+          {item.transcript_text && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Generate Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Choose summary type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {summaryTemplates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    onClick={generateSummary}
+                    disabled={!selectedTemplateId || isGeneratingSummary}
+                    size="sm"
+                  >
+                    {isGeneratingSummary ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      'Generate'
+                    )}
+                  </Button>
                 </div>
                 
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm">
-                    <Download size={14} className="mr-1" />
-                    Download
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Share2 size={14} className="mr-1" />
-                    Share
-                  </Button>
-                </div>
+                {selectedTemplateId && (
+                  <p className="text-xs text-muted-foreground">
+                    {summaryTemplates.find(t => t.id === selectedTemplateId)?.description}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Existing Summaries */}
+          {summaryRequests.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Generated Summaries</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {summaryRequests.map((request) => (
+                  <div key={request.id} className="border rounded p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{request.template_name}</span>
+                      <Badge className={getStatusColor(request.status)} variant="secondary">
+                        {request.status}
+                      </Badge>
+                    </div>
+                    {request.summary_content && (
+                      <p className="text-sm text-muted-foreground line-clamp-3">
+                        {request.summary_content}
+                      </p>
+                    )}
+                    <div className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(request.created_at), { addSuffix: true })}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
@@ -158,18 +459,6 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
               )}
             </CardContent>
           </Card>
-
-          {/* AI Summary */}
-          {item.ai_summary && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">AI Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-relaxed">{item.ai_summary}</p>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Transcript */}
           {item.transcript_text && (

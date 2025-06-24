@@ -75,13 +75,10 @@ serve(async (req) => {
     const audioMinutes = Math.ceil(duration / 60);
     const estimatedCost = audioMinutes * 0.006; // $0.006 per minute
 
-    // Analyze transcript for speakers (simple heuristic)
+    // Simple speaker count estimation (no complex analysis)
     const speakerCount = estimateSpeakerCount(transcriptText);
 
-    // Extract keywords using simple analysis
-    const keywords = extractKeywords(transcriptText);
-
-    // Update knowledge item with transcription results
+    // Update knowledge item with ONLY transcription results (no summary or keywords)
     const { error: updateError } = await supabase
       .from('knowledge_items')
       .update({
@@ -90,7 +87,6 @@ serve(async (req) => {
         speaker_count: speakerCount,
         processing_cost: estimatedCost,
         processing_status: 'completed',
-        ai_keywords: keywords,
         audio_metadata: {
           transcription_completed_at: new Date().toISOString(),
           word_count: words.length,
@@ -153,7 +149,7 @@ serve(async (req) => {
   }
 });
 
-// Helper function to estimate speaker count
+// Simplified helper function to estimate speaker count
 function estimateSpeakerCount(text: string): number {
   // Simple heuristic: look for conversation patterns
   const dialogueMarkers = [
@@ -175,39 +171,4 @@ function estimateSpeakerCount(text: string): number {
   if (speakerIndicators < 6) return 2;
   if (speakerIndicators < 12) return 3;
   return Math.min(Math.ceil(speakerIndicators / 4), 10);
-}
-
-// Helper function to extract keywords
-function extractKeywords(text: string): string[] {
-  if (!text) return [];
-  
-  // Remove common words and extract meaningful terms
-  const commonWords = new Set([
-    'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
-    'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
-    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
-    'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it',
-    'we', 'they', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'a', 'an'
-  ]);
-  
-  const words = text.toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(word => 
-      word.length > 3 && 
-      !commonWords.has(word) && 
-      !/^\d+$/.test(word)
-    );
-  
-  // Count word frequency
-  const wordCount = new Map<string, number>();
-  words.forEach(word => {
-    wordCount.set(word, (wordCount.get(word) || 0) + 1);
-  });
-  
-  // Get top keywords by frequency
-  return Array.from(wordCount.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([word]) => word);
 }

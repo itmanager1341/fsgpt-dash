@@ -1507,6 +1507,87 @@ export type Database = {
         }
         Relationships: []
       }
+      summary_requests: {
+        Row: {
+          created_at: string | null
+          id: string
+          knowledge_item_id: string
+          status: string | null
+          summary_content: string | null
+          template_id: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          knowledge_item_id: string
+          status?: string | null
+          summary_content?: string | null
+          template_id: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          knowledge_item_id?: string
+          status?: string | null
+          summary_content?: string | null
+          template_id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "summary_requests_knowledge_item_id_fkey"
+            columns: ["knowledge_item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "summary_requests_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "summary_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      summary_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+          prompt_template: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          prompt_template: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          prompt_template?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       sync_operations: {
         Row: {
           completed_items: number | null

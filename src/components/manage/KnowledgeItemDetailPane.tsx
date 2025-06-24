@@ -80,49 +80,54 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
       if (!item?.id) return;
 
       try {
-        // Load summary templates directly from table
-        const { data: templates, error: templatesError } = await supabase
+        // Load summary templates directly from table with proper error handling
+        const templatesResponse = await supabase
           .from('summary_templates' as any)
           .select('*')
           .eq('is_active', true)
           .order('display_order');
 
-        if (!templatesError && templates) {
-          setSummaryTemplates(templates);
+        if (templatesResponse.data && !templatesResponse.error) {
+          setSummaryTemplates(templatesResponse.data);
         } else {
+          console.warn('Could not load templates:', templatesResponse.error);
           // Set default templates if query fails
           setSummaryTemplates([
-            { id: '1', name: 'Executive Summary', description: 'High-level overview', prompt_template: '' },
-            { id: '2', name: 'Meeting Notes', description: 'Detailed notes', prompt_template: '' },
-            { id: '3', name: 'Action Items', description: 'Extract tasks', prompt_template: '' }
+            { id: '550e8400-e29b-41d4-a716-446655440001', name: 'Executive Summary', description: 'High-level overview', prompt_template: '' },
+            { id: '550e8400-e29b-41d4-a716-446655440002', name: 'Meeting Notes', description: 'Detailed notes', prompt_template: '' },
+            { id: '550e8400-e29b-41d4-a716-446655440003', name: 'Action Items', description: 'Extract tasks', prompt_template: '' }
           ]);
         }
 
-        // Load existing summary requests directly from table
-        const { data: requests, error: requestsError } = await supabase
+        // Load existing summary requests directly from table with proper error handling
+        const requestsResponse = await supabase
           .from('summary_requests' as any)
           .select('*')
           .eq('knowledge_item_id', item.id);
 
-        if (!requestsError && requests) {
+        if (requestsResponse.data && !requestsResponse.error) {
           // Get template names for the requests
-          const requestsWithNames = requests.map((request: any) => {
-            const template = templates?.find((t: any) => t.id === request.template_id);
+          const requestsWithNames = requestsResponse.data.map((request: any) => {
+            const template = templatesResponse.data?.find((t: any) => t.id === request.template_id);
             return {
               ...request,
               template_name: template?.name || 'Unknown Template'
             };
           });
           setSummaryRequests(requestsWithNames);
+        } else {
+          console.warn('Could not load summary requests:', requestsResponse.error);
+          setSummaryRequests([]);
         }
       } catch (error) {
         console.error('Error loading summary data:', error);
         // Set default templates if everything fails
         setSummaryTemplates([
-          { id: '1', name: 'Executive Summary', description: 'High-level overview', prompt_template: '' },
-          { id: '2', name: 'Meeting Notes', description: 'Detailed notes', prompt_template: '' },
-          { id: '3', name: 'Action Items', description: 'Extract tasks', prompt_template: '' }
+          { id: '550e8400-e29b-41d4-a716-446655440001', name: 'Executive Summary', description: 'High-level overview', prompt_template: '' },
+          { id: '550e8400-e29b-41d4-a716-446655440002', name: 'Meeting Notes', description: 'Detailed notes', prompt_template: '' },
+          { id: '550e8400-e29b-41d4-a716-446655440003', name: 'Action Items', description: 'Extract tasks', prompt_template: '' }
         ]);
+        setSummaryRequests([]);
       }
     };
 
@@ -201,13 +206,13 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
       toast.success('Summary generated successfully');
       
       // Reload summary requests
-      const { data: updatedRequests } = await supabase
+      const updatedRequestsResponse = await supabase
         .from('summary_requests' as any)
         .select('*')
         .eq('knowledge_item_id', item.id);
 
-      if (updatedRequests) {
-        const requestsWithNames = updatedRequests.map((request: any) => {
+      if (updatedRequestsResponse.data && !updatedRequestsResponse.error) {
+        const requestsWithNames = updatedRequestsResponse.data.map((request: any) => {
           const template = summaryTemplates.find(t => t.id === request.template_id);
           return {
             ...request,

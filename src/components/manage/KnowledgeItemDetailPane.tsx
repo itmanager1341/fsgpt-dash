@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Play, Pause, Download, Edit2, Share2, FileAudio, Clock, User, Calendar, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -80,44 +81,44 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
       if (!item?.id) return;
 
       try {
-        // Load summary templates directly from table with proper error handling
-        const templatesResponse = await supabase
-          .from('summary_templates' as any)
+        // Load summary templates
+        const { data: templatesData, error: templatesError } = await supabase
+          .from('summary_templates')
           .select('*')
           .eq('is_active', true)
           .order('display_order');
 
-        if (templatesResponse.data && !templatesResponse.error) {
-          setSummaryTemplates(templatesResponse.data);
-        } else {
-          console.warn('Could not load templates:', templatesResponse.error);
+        if (templatesError) {
+          console.warn('Could not load templates:', templatesError);
           // Set default templates if query fails
           setSummaryTemplates([
             { id: '550e8400-e29b-41d4-a716-446655440001', name: 'Executive Summary', description: 'High-level overview', prompt_template: '' },
             { id: '550e8400-e29b-41d4-a716-446655440002', name: 'Meeting Notes', description: 'Detailed notes', prompt_template: '' },
             { id: '550e8400-e29b-41d4-a716-446655440003', name: 'Action Items', description: 'Extract tasks', prompt_template: '' }
           ]);
+        } else {
+          setSummaryTemplates(templatesData || []);
         }
 
-        // Load existing summary requests directly from table with proper error handling
-        const requestsResponse = await supabase
-          .from('summary_requests' as any)
+        // Load existing summary requests
+        const { data: requestsData, error: requestsError } = await supabase
+          .from('summary_requests')
           .select('*')
           .eq('knowledge_item_id', item.id);
 
-        if (requestsResponse.data && !requestsResponse.error) {
+        if (requestsError) {
+          console.warn('Could not load summary requests:', requestsError);
+          setSummaryRequests([]);
+        } else {
           // Get template names for the requests
-          const requestsWithNames = requestsResponse.data.map((request: any) => {
-            const template = templatesResponse.data?.find((t: any) => t.id === request.template_id);
+          const requestsWithNames = (requestsData || []).map((request: any) => {
+            const template = templatesData?.find((t: any) => t.id === request.template_id);
             return {
               ...request,
               template_name: template?.name || 'Unknown Template'
             };
           });
           setSummaryRequests(requestsWithNames);
-        } else {
-          console.warn('Could not load summary requests:', requestsResponse.error);
-          setSummaryRequests([]);
         }
       } catch (error) {
         console.error('Error loading summary data:', error);
@@ -176,7 +177,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
     try {
       // Create summary request record
       const { data: summaryRequest, error: requestError } = await supabase
-        .from('summary_requests' as any)
+        .from('summary_requests')
         .insert({
           knowledge_item_id: item.id,
           template_id: selectedTemplateId,
@@ -206,13 +207,13 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
       toast.success('Summary generated successfully');
       
       // Reload summary requests
-      const updatedRequestsResponse = await supabase
-        .from('summary_requests' as any)
+      const { data: updatedRequestsData, error: updatedRequestsError } = await supabase
+        .from('summary_requests')
         .select('*')
         .eq('knowledge_item_id', item.id);
 
-      if (updatedRequestsResponse.data && !updatedRequestsResponse.error) {
-        const requestsWithNames = updatedRequestsResponse.data.map((request: any) => {
+      if (!updatedRequestsError && updatedRequestsData) {
+        const requestsWithNames = updatedRequestsData.map((request: any) => {
           const template = summaryTemplates.find(t => t.id === request.template_id);
           return {
             ...request,

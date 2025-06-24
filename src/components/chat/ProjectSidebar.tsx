@@ -28,7 +28,7 @@ import {
   MoreHorizontal,
   Trash,
   Edit,
-  PanelLeftClose
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
@@ -75,12 +75,10 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     handleDragLeave,
   } = useDragAndDrop();
 
-  // Get conversations not assigned to any project by checking sessions data
   const unassignedConversations = sessions.filter(session => 
     !session.conversation.project_id
   );
 
-  // Helper function to get current project ID for a conversation from sessions
   const getCurrentProjectId = (conversationId: string): string | null => {
     const session = sessions.find(s => s.conversation.id === conversationId);
     return session?.conversation.project_id || null;
@@ -112,12 +110,10 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const handleMoveToProject = async (conversationId: string, projectId: string | null) => {
     const currentProjectId = getCurrentProjectId(conversationId);
     
-    // Only proceed if actually moving to a different project
     if (currentProjectId === projectId) {
-      return; // No change needed, don't show success message
+      return;
     }
     
-    // Optimistic update
     if (onConversationMoved) {
       onConversationMoved(conversationId, projectId);
     }
@@ -128,7 +124,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         projectId,
       });
     } catch (error) {
-      // Revert optimistic update on error
       if (onConversationMoved) {
         onConversationMoved(conversationId, currentProjectId);
       }
@@ -141,7 +136,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     if (dragState.draggedItemId) {
       const currentProjectId = getCurrentProjectId(dragState.draggedItemId);
       
-      // Only move if it's actually a different project
       if (currentProjectId !== projectId) {
         await handleMoveToProject(dragState.draggedItemId, projectId);
       }
@@ -160,7 +154,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     return session.conversation.title;
   };
 
-  // Get conversations for a specific project from sessions data
   const getProjectConversations = (projectId: string) => {
     return sessions.filter(session => session.conversation.project_id === projectId);
   };
@@ -265,7 +258,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-muted/20">
-      {/* Header with New Chat and Sidebar Toggle */}
+      {/* Header with Close Button and New Chat */}
       <div className="p-3 border-b">
         <div className="flex items-center justify-between mb-3">
           <Button
@@ -274,7 +267,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             onClick={onToggleSidebar}
             className="p-1 h-8 w-8"
           >
-            <PanelLeftClose size={16} />
+            <X size={16} />
           </Button>
           
           <Button

@@ -29,11 +29,11 @@ const queryClient = new QueryClient({
   },
 });
 
-// Component to conditionally render navbar
+// Component to conditionally render navbar (excluding chat page)
 const ConditionalNavbar = () => {
   const location = useLocation();
   
-  // Hide navbar on chat page
+  // Hide navbar on chat page since it now has its own navbar
   if (location.pathname === '/chat') {
     return null;
   }

@@ -6,6 +6,8 @@ import { useSidebar } from '@/hooks/useSidebar';
 import ProjectSidebar from './ProjectSidebar';
 import MessageThread from './MessageThread';
 import InlineChatInput from './InlineChatInput';
+import { Button } from '@/components/ui/button';
+import { PanelLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const ChatInterface: React.FC = () => {
@@ -39,15 +41,12 @@ const ChatInterface: React.FC = () => {
 
   useEffect(() => {
     if (activeSession) {
-      // Always try to load messages when a session becomes active
-      // Check if messages are empty or if we need to refresh
       if (activeSession.messages.length === 0) {
         loadMessages(activeSession.conversation.id);
       }
     }
   }, [activeSession?.conversation.id, loadMessages]);
 
-  // Update selected model when modelAccess data is loaded
   useEffect(() => {
     if (modelAccess.length > 0 && !selectedModel) {
       const firstEnabledModel = modelAccess.find(m => m.isEnabled && !m.isOverLimit);
@@ -63,7 +62,6 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleSelectConversation = (conversationId: string) => {
-    // Set active session and ensure messages are loaded
     setActiveSession(conversationId);
   };
 
@@ -91,10 +89,9 @@ const ChatInterface: React.FC = () => {
     updateConversationProject(conversationId, projectId);
   };
 
-  // Show loading state while API access data is being fetched
   if (isLoadingAccess) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading model access...</p>
@@ -104,7 +101,23 @@ const ChatInterface: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex w-full">
+    <div className="h-full flex w-full relative">
+      {/* Collapsed Sidebar Toggle - Always visible when collapsed */}
+      {isCollapsed && (
+        <div className="flex-shrink-0 w-12 border-r bg-background flex flex-col">
+          <div className="p-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleSidebar}
+              className="p-1 h-8 w-8"
+            >
+              <PanelLeft size={16} />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <div className={cn(
         "border-r bg-background transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0",

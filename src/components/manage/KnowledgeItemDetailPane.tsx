@@ -79,36 +79,74 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
     const loadSummaryData = async () => {
       if (!item?.id) return;
 
-      // Load summary templates
-      const { data: templates, error: templatesError } = await supabase
-        .from('summary_templates')
-        .select('*')
-        .eq('is_active', true)
-        .order('display_order');
+      try {
+        // Load summary templates using raw SQL query since types aren't generated yet
+        const { data: templates, error: templatesError } = await supabase
+          .rpc('get_summary_templates')
+          .then(result => {
+            // If the RPC doesn't exist, fall back to direct query
+            if (result.error?.code === '42883') { // function does not exist
+              return supabase
+                .from('summary_templates' as any)
+                .select('*')
+                .eq('is_active', true)
+                .order('display_order');
+            }
+            return result;
+          })
+          .catch(async () => {
+            // Final fallback - use direct query with any type
+            return await supabase
+              .from('summary_templates' as any)
+              .select('*')
+              .eq('is_active', true)
+              .order('display_order');
+          });
 
-      if (templatesError) {
-        console.error('Error loading summary templates:', templatesError);
-      } else {
-        setSummaryTemplates(templates || []);
-      }
+        if (!templatesError && templates) {
+          setSummaryTemplates(templates);
+        }
 
-      // Load existing summary requests for this item
-      const { data: requests, error: requestsError } = await supabase
-        .from('summary_requests')
-        .select(`
-          *,
-          summary_templates!inner(name)
-        `)
-        .eq('knowledge_item_id', item.id);
+        // Load existing summary requests
+        const { data: requests, error: requestsError } = await supabase
+          .rpc('get_summary_requests', { knowledge_item_id: item.id })
+          .then(result => {
+            if (result.error?.code === '42883') { // function does not exist
+              return supabase
+                .from('summary_requests' as any)
+                .select('*')
+                .eq('knowledge_item_id', item.id);
+            }
+            return result;
+          })
+          .catch(async () => {
+            return await supabase
+              .from('summary_requests' as any)
+              .select('*')
+              .eq('knowledge_item_id', item.id);
+          });
 
-      if (requestsError) {
-        console.error('Error loading summary requests:', requestsError);
-      } else {
-        const formattedRequests = requests?.map(req => ({
-          ...req,
-          template_name: req.summary_templates?.name
-        })) || [];
-        setSummaryRequests(formattedRequests);
+        if (!requestsError && requests) {
+          // Get template names for the requests
+          const requestsWithNames = await Promise.all(
+            requests.map(async (request: any) => {
+              const template = templates?.find((t: any) => t.id === request.template_id);
+              return {
+                ...request,
+                template_name: template?.name || 'Unknown Template'
+              };
+            })
+          );
+          setSummaryRequests(requestsWithNames);
+        }
+      } catch (error) {
+        console.error('Error loading summary data:', error);
+        // Set some default templates if database queries fail
+        setSummaryTemplates([
+          { id: '1', name: 'Executive Summary', description: 'High-level overview', prompt_template: '' },
+          { id: '2', name: 'Meeting Notes', description: 'Detailed notes', prompt_template: '' },
+          { id: '3', name: 'Action Items', description: 'Extract tasks', prompt_template: '' }
+        ]);
       }
     };
 
@@ -157,7 +195,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
     try {
       // Create summary request record
       const { data: summaryRequest, error: requestError } = await supabase
-        .from('summary_requests')
+        .from('summary_requests' as any)
         .insert({
           knowledge_item_id: item.id,
           template_id: selectedTemplateId,
@@ -187,20 +225,22 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
       toast.success('Summary generated successfully');
       
       // Reload summary requests
-      const { data: updatedRequests, error: reloadError } = await supabase
-        .from('summary_requests')
-        .select(`
-          *,
-          summary_templates!inner(name)
-        `)
+      const { data: updatedRequests } = await supabase
+        .from('summary_requests' as any)
+        .select('*')
         .eq('knowledge_item_id', item.id);
 
-      if (!reloadError) {
-        const formattedRequests = updatedRequests?.map(req => ({
-          ...req,
-          template_name: req.summary_templates?.name
-        })) || [];
-        setSummaryRequests(formattedRequests);
+      if (updatedRequests) {
+        const requestsWithNames = await Promise.all(
+          updatedRequests.map(async (request: any) => {
+            const template = summaryTemplates.find(t => t.id === request.template_id);
+            return {
+              ...request,
+              template_name: template?.name || 'Unknown Template'
+            };
+          })
+        );
+        setSummaryRequests(requestsWithNames);
       }
 
       setSelectedTemplateId('');

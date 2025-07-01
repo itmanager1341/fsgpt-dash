@@ -295,6 +295,36 @@ export type Database = {
           },
         ]
       }
+      auth_rate_limits: {
+        Row: {
+          attempt_type: string
+          attempts: number | null
+          blocked_until: string | null
+          created_at: string | null
+          id: string
+          identifier: string
+          last_attempt: string | null
+        }
+        Insert: {
+          attempt_type: string
+          attempts?: number | null
+          blocked_until?: string | null
+          created_at?: string | null
+          id?: string
+          identifier: string
+          last_attempt?: string | null
+        }
+        Update: {
+          attempt_type?: string
+          attempts?: number | null
+          blocked_until?: string | null
+          created_at?: string | null
+          id?: string
+          identifier?: string
+          last_attempt?: string | null
+        }
+        Relationships: []
+      }
       authors: {
         Row: {
           article_count: number | null
@@ -1477,6 +1507,36 @@ export type Database = {
         }
         Relationships: []
       }
+      security_audit_log: {
+        Row: {
+          created_at: string | null
+          event_details: Json | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_details?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_details?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           cluster_alignment: string[] | null
@@ -2042,6 +2102,10 @@ export type Database = {
         Args: { job_name_param: string }
         Returns: string
       }
+      sanitize_content: {
+        Args: { content: string }
+        Returns: string
+      }
       search_content_chunks: {
         Args: {
           query_text: string
@@ -2104,6 +2168,10 @@ export type Database = {
           cost_param: number
         }
         Returns: undefined
+      }
+      validate_file_upload: {
+        Args: { file_name: string; file_size: number; file_type: string }
+        Returns: boolean
       }
       vector_avg: {
         Args: { "": number[] }

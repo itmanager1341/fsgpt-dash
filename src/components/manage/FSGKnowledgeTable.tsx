@@ -307,7 +307,11 @@ const FSGKnowledgeTable = ({
       <AudioUploadDialog
         open={audioUploadDialogOpen}
         onOpenChange={setAudioUploadDialogOpen}
-        categoryId={actualCategoryId}
+        onUploadComplete={(item) => {
+          // Handle the uploaded item here
+          console.log('Audio uploaded:', item);
+          // You might want to refetch the knowledge items or add the item to the list
+        }}
       />
 
       <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>

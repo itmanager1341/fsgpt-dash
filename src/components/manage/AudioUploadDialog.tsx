@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   Dialog,
@@ -7,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SecureAudioUpload } from './SecureAudioUpload';
+import { KnowledgeItem } from '@/types/knowledge';
 
 interface AudioUploadDialogProps {
   open: boolean;

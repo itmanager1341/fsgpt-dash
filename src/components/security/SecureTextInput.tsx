@@ -15,6 +15,7 @@ interface SecureTextInputProps {
   required?: boolean;
   className?: string;
   sanitize?: boolean;
+  onKeyPress?: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 }
 
 export const SecureTextInput: React.FC<SecureTextInputProps> = ({
@@ -25,7 +26,8 @@ export const SecureTextInput: React.FC<SecureTextInputProps> = ({
   multiline = false,
   required = false,
   className,
-  sanitize = true
+  sanitize = true,
+  onKeyPress
 }) => {
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +55,7 @@ export const SecureTextInput: React.FC<SecureTextInputProps> = ({
       <InputComponent
         value={value}
         onChange={handleChange}
+        onKeyPress={onKeyPress}
         placeholder={placeholder}
         maxLength={maxLength}
         required={required}

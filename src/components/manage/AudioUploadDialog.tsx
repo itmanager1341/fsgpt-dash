@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SecureAudioUpload } from './SecureAudioUpload';
-import { KnowledgeItem } from '@/types/knowledge';
+import { KnowledgeItem } from '@/hooks/useKnowledgeItems';
 
 interface AudioUploadDialogProps {
   open: boolean;

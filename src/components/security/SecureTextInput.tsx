@@ -48,6 +48,12 @@ export const SecureTextInput: React.FC<SecureTextInputProps> = ({
     onChange(cleanValue);
   }, [onChange, maxLength, sanitize]);
 
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (onKeyPress) {
+      onKeyPress(e);
+    }
+  }, [onKeyPress]);
+
   const InputComponent = multiline ? Textarea : Input;
 
   return (
@@ -55,7 +61,7 @@ export const SecureTextInput: React.FC<SecureTextInputProps> = ({
       <InputComponent
         value={value}
         onChange={handleChange}
-        onKeyPress={onKeyPress}
+        onKeyPress={handleKeyPress}
         placeholder={placeholder}
         maxLength={maxLength}
         required={required}

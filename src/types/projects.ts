@@ -8,6 +8,7 @@ export interface Project {
   icon: string;
   parent_project_id?: string;
   is_archived: boolean;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -28,4 +29,5 @@ export interface CreateProjectData {
   color?: string;
   icon?: string;
   parent_project_id?: string;
+  is_public?: boolean;
 }

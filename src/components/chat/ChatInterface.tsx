@@ -157,6 +157,7 @@ const ChatInterface: React.FC = () => {
             selectedModel={selectedModel}
             selectedProvider={selectedProvider}
             onModelSelect={handleModelSelect}
+            onNewConversation={handleNewConversation}
           />
         </div>
       </div>

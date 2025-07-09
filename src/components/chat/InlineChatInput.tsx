@@ -17,9 +17,11 @@ import {
   FileText, 
   BarChart,
   Download,
-  Zap
+  Zap,
+  Megaphone
 } from 'lucide-react';
 import { ModelAccess } from '@/types/frontend';
+import { useCampaign } from '@/hooks/useCampaign';
 
 interface InlineChatInputProps {
   onSendMessage: (content: string, provider?: string, model?: string, documentIds?: string[]) => void;
@@ -29,6 +31,7 @@ interface InlineChatInputProps {
   selectedModel: string;
   selectedProvider: string;
   onModelSelect: (model: string, provider: string) => void;
+  onNewConversation?: (projectId?: string) => void;
 }
 
 const InlineChatInput: React.FC<InlineChatInputProps> = ({
@@ -39,12 +42,14 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
   selectedModel,
   selectedProvider,
   onModelSelect,
+  onNewConversation,
 }) => {
   const [message, setMessage] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { selectedCampaignTool, setSelectedCampaignTool, createCampaign, generateCampaignBriefLink } = useCampaign();
 
   // Model shortcuts mapping with updated display names
   const modelShortcuts = {
@@ -60,6 +65,7 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
     '/analyze': { icon: FileText, description: 'Analyze document' },
     '/summarize': { icon: BarChart, description: 'Summarize conversation' },
     '/export': { icon: Download, description: 'Export conversation' },
+    '/campaign': { icon: Megaphone, description: 'Create campaign' },
   };
 
   // Get current model display info
@@ -146,12 +152,48 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
     textareaRef.current?.focus();
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!message.trim() || disabled) return;
 
     let processedMessage = message;
     let finalProvider = selectedProvider;
     let finalModel = selectedModel;
+
+    // Handle campaign creation
+    if (selectedCampaignTool || selectedTool === '/campaign') {
+      if (!message.trim()) return;
+      
+      try {
+        const result = await createCampaign.mutateAsync(message.trim());
+        
+        // Generate and download the campaign brief template
+        generateCampaignBriefLink();
+        
+        // Create new conversation for this campaign
+        if (onNewConversation) {
+          onNewConversation(result.project.id);
+        }
+        
+        // Send campaign creation message
+        onSendMessage(
+          `Campaign "${message.trim()}" created successfully! I've downloaded a Campaign Brief template for you to complete. Please fill it out and upload it back to this chat for me to review and help you create your marketing framework and content calendar.`,
+          finalProvider,
+          finalModel
+        );
+      } catch (error) {
+        console.error('Error creating campaign:', error);
+      }
+      
+      setMessage('');
+      setSelectedTool(null);
+      setSelectedCampaignTool(false);
+      
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      return;
+    }
 
     // Process model shortcuts in message
     Object.entries(modelShortcuts).forEach(([shortcut, config]) => {
@@ -219,7 +261,7 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
               value={message}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={placeholder}
+              placeholder={selectedCampaignTool || selectedTool === '/campaign' ? "Give your campaign a name to start" : placeholder}
               disabled={disabled}
               className="min-h-[44px] max-h-[120px] resize-none pr-12 text-sm border-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring"
               rows={1}
@@ -319,7 +361,14 @@ const InlineChatInput: React.FC<InlineChatInputProps> = ({
               {Object.entries(toolCommands).map(([command, config]) => (
                 <DropdownMenuItem
                   key={command}
-                  onClick={() => setSelectedTool(command)}
+                  onClick={() => {
+                    if (command === '/campaign') {
+                      setSelectedCampaignTool(true);
+                      setSelectedTool(command);
+                    } else {
+                      setSelectedTool(command);
+                    }
+                  }}
                   className="flex items-center gap-2"
                 >
                   <config.icon size={14} />

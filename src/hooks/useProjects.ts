@@ -8,13 +8,35 @@ import { Project, CreateProjectData, ProjectWithConversations } from '@/types/pr
 export const useProjects = () => {
   const queryClient = useQueryClient();
 
+  // Query for user's private projects
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return [];
+
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('is_archived', false)
+        .eq('user_id', session.user.id)
+        .eq('is_public', false)
+        .order('name');
+      
+      if (error) throw error;
+      return data as Project[];
+    },
+  });
+
+  // Query for public projects (campaigns)
+  const { data: publicProjects = [], isLoading: isLoadingPublic } = useQuery({
+    queryKey: ['public-projects'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('projects')
         .select('*')
         .eq('is_archived', false)
+        .eq('is_public', true)
         .order('name');
       
       if (error) throw error;
@@ -25,7 +47,10 @@ export const useProjects = () => {
   const { data: projectsWithConversations = [], isLoading: isLoadingWithConversations } = useQuery({
     queryKey: ['projects-with-conversations'],
     queryFn: async () => {
-      // Get projects with their conversations
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return [];
+
+      // Get user's private projects with their conversations
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select(`
@@ -38,11 +63,67 @@ export const useProjects = () => {
           )
         `)
         .eq('is_archived', false)
+        .eq('user_id', session.user.id)
+        .eq('is_public', false)
         .order('name');
       
       if (projectsError) throw projectsError;
 
       // Build hierarchical structure
+      const projectMap = new Map<string, ProjectWithConversations>();
+      const rootProjects: ProjectWithConversations[] = [];
+
+      // First, create all projects
+      projectsData?.forEach(project => {
+        const projectWithConversations: ProjectWithConversations = {
+          ...project,
+          conversations: project.conversations || [],
+          subprojects: [],
+        };
+        projectMap.set(project.id, projectWithConversations);
+      });
+
+      // Then, organize into hierarchy
+      projectsData?.forEach(project => {
+        const projectWithConversations = projectMap.get(project.id)!;
+        if (project.parent_project_id) {
+          const parent = projectMap.get(project.parent_project_id);
+          if (parent) {
+            parent.subprojects = parent.subprojects || [];
+            parent.subprojects.push(projectWithConversations);
+          }
+        } else {
+          rootProjects.push(projectWithConversations);
+        }
+      });
+
+      return rootProjects;
+    },
+  });
+
+  // Query for public projects with conversations (campaigns)
+  const { data: publicProjectsWithConversations = [], isLoading: isLoadingPublicWithConversations } = useQuery({
+    queryKey: ['public-projects-with-conversations'],
+    queryFn: async () => {
+      // Get public projects with their conversations
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          conversations!conversations_project_id_fkey(
+            id,
+            title,
+            updated_at,
+            total_cost
+          )
+        `)
+        .eq('is_archived', false)
+        .eq('is_public', true)
+        .order('name');
+      
+      if (projectsError) throw projectsError;
+
+      // Build hierarchical structure for public projects
       const projectMap = new Map<string, ProjectWithConversations>();
       const rootProjects: ProjectWithConversations[] = [];
 
@@ -94,6 +175,8 @@ export const useProjects = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-with-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects-with-conversations'] });
       toast.success('Project created successfully');
     },
     onError: (error) => {
@@ -117,6 +200,8 @@ export const useProjects = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-with-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects-with-conversations'] });
       toast.success('Project updated successfully');
     },
     onError: (error) => {
@@ -137,6 +222,8 @@ export const useProjects = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-with-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects-with-conversations'] });
       toast.success('Project archived successfully');
     },
     onError: (error) => {
@@ -157,7 +244,9 @@ export const useProjects = () => {
     onSuccess: () => {
       // Invalidate all related queries to ensure proper state sync
       queryClient.invalidateQueries({ queryKey: ['projects-with-conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects-with-conversations'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['public-projects'] });
       queryClient.invalidateQueries({ queryKey: ['knowledge-items'] });
       // Also invalidate conversations to update the chat list
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -171,8 +260,10 @@ export const useProjects = () => {
 
   return {
     projects,
+    publicProjects,
     projectsWithConversations,
-    isLoading: isLoading || isLoadingWithConversations,
+    publicProjectsWithConversations,
+    isLoading: isLoading || isLoadingWithConversations || isLoadingPublic || isLoadingPublicWithConversations,
     createProject,
     updateProject,
     deleteProject,

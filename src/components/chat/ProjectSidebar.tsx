@@ -28,7 +28,9 @@ import {
   MoreHorizontal,
   Trash,
   Edit,
-  X
+  X,
+  Globe,
+  Megaphone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/hooks/useProjects';
@@ -58,6 +60,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 }) => {
   const { 
     projectsWithConversations, 
+    publicProjectsWithConversations,
     createProject, 
     assignConversationToProject,
     isLoading: isProjectsLoading 
@@ -158,7 +161,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     return sessions.filter(session => session.conversation.project_id === projectId);
   };
 
-  const renderProject = (project: ProjectWithConversations, level = 0) => {
+  const renderProject = (project: ProjectWithConversations, level = 0, isPublic = false) => {
     const isExpanded = expandedProjects.has(project.id);
     const projectConversations = getProjectConversations(project.id);
     const hasConversations = projectConversations.length > 0;
@@ -187,34 +190,43 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             {(hasConversations || hasSubprojects) && (
               isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
             )}
-            {isExpanded ? <FolderOpen size={16} className="text-muted-foreground" /> : <Folder size={16} className="text-muted-foreground" />}
+            {isPublic ? (
+              <Megaphone size={16} className="text-blue-500" />
+            ) : (
+              isExpanded ? <FolderOpen size={16} className="text-muted-foreground" /> : <Folder size={16} className="text-muted-foreground" />
+            )}
             <span className="text-sm truncate">{project.name}</span>
             {hasConversations && (
               <span className="text-xs text-muted-foreground">({projectConversations.length})</span>
             )}
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0">
-                <MoreHorizontal size={12} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onNewConversation(project.id)}>
-                <Plus size={14} className="mr-2" />
-                New Chat
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Edit size={14} className="mr-2" />
-                Edit Project
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">
-                <Trash size={14} className="mr-2" />
-                Archive Project
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {!isPublic && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0">
+                  <MoreHorizontal size={12} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onNewConversation(project.id)}>
+                  <Plus size={14} className="mr-2" />
+                  New Chat
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Edit size={14} className="mr-2" />
+                  Edit Project
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive">
+                  <Trash size={14} className="mr-2" />
+                  Archive Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {isPublic && (
+            <Globe size={12} className="text-muted-foreground opacity-60" />
+          )}
         </div>
 
         {/* Project Contents */}
@@ -222,7 +234,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           <div className="ml-2 space-y-0.5">
             {/* Subprojects */}
             {project.subprojects?.map(subproject => 
-              renderProject(subproject, level + 1)
+              renderProject(subproject, level + 1, isPublic)
             )}
             
             {/* Conversations */}
@@ -231,6 +243,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                 key={session.conversation.id}
                 session={session}
                 projects={projectsWithConversations}
+                publicProjects={publicProjectsWithConversations}
                 onMoveToProject={handleMoveToProject}
                 onDeleteConversation={onDeleteConversation}
               >
@@ -240,9 +253,9 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                     activeSession?.conversation.id === session.conversation.id && "bg-accent",
                     dragState.draggedItemId === session.conversation.id && "opacity-50"
                   )}
-                  draggable
-                  onDragStart={() => handleDragStart(session.conversation.id)}
-                  onDragEnd={handleDragEnd}
+                  draggable={!isPublic}
+                  onDragStart={!isPublic ? () => handleDragStart(session.conversation.id) : undefined}
+                  onDragEnd={!isPublic ? handleDragEnd : undefined}
                   onClick={() => onSelectConversation(session.conversation.id)}
                 >
                   <MessageSquare size={14} className="text-muted-foreground flex-shrink-0" />
@@ -291,8 +304,22 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             </div>
           ) : (
             <>
-              {/* Projects */}
-              {projectsWithConversations.map(project => renderProject(project))}
+              {/* My Projects Section */}
+              <div className="mb-4">
+                <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
+                  My Projects
+                </div>
+                {projectsWithConversations.map(project => renderProject(project, 0, false))}
+              </div>
+
+              {/* Public Campaigns Section */}
+              <div className="mb-4">
+                <div className="text-xs font-medium text-muted-foreground mb-2 px-2 flex items-center gap-2">
+                  <Globe size={12} />
+                  Public Campaigns
+                </div>
+                {publicProjectsWithConversations.map(project => renderProject(project, 0, true))}
+              </div>
               
               {/* Unassigned Conversations */}
               {unassignedConversations.length > 0 && (
@@ -317,6 +344,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                       key={session.conversation.id}
                       session={session}
                       projects={projectsWithConversations}
+                      publicProjects={publicProjectsWithConversations}
                       onMoveToProject={handleMoveToProject}
                       onDeleteConversation={onDeleteConversation}
                     >
@@ -339,7 +367,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                 </div>
               )}
 
-              {projectsWithConversations.length === 0 && unassignedConversations.length === 0 && (
+              {projectsWithConversations.length === 0 && publicProjectsWithConversations.length === 0 && unassignedConversations.length === 0 && (
                 <div className="p-6 text-center text-muted-foreground">
                   <MessageSquare size={32} className="mx-auto mb-3 opacity-50" />
                   <p className="text-sm">No conversations yet</p>

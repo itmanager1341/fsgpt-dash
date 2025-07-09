@@ -18,6 +18,7 @@ interface ConversationContextMenuProps {
   children: React.ReactNode;
   session: ChatSession;
   projects: ProjectWithConversations[];
+  publicProjects?: ProjectWithConversations[];
   onMoveToProject: (conversationId: string, projectId: string | null) => void;
   onDeleteConversation: (conversationId: string) => void;
 }
@@ -26,10 +27,12 @@ const ConversationContextMenu: React.FC<ConversationContextMenuProps> = ({
   children,
   session,
   projects,
+  publicProjects = [],
   onMoveToProject,
   onDeleteConversation,
 }) => {
-  const currentProject = projects.find(p => 
+  const allProjects = [...projects, ...publicProjects];
+  const currentProject = allProjects.find(p => 
     p.conversations.some(c => c.id === session.conversation.id)
   );
 
@@ -55,7 +58,7 @@ const ConversationContextMenu: React.FC<ConversationContextMenuProps> = ({
                 <ContextMenuSeparator />
               </>
             )}
-            {projects.map(project => (
+            {allProjects.map(project => (
               <ContextMenuItem
                 key={project.id}
                 onClick={() => onMoveToProject(session.conversation.id, project.id)}

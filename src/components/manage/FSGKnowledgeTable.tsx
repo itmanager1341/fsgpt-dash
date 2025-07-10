@@ -31,6 +31,7 @@ import { useKnowledgeItems, KnowledgeItem } from '@/hooks/useKnowledgeItems';
 import { formatDistanceToNow } from 'date-fns';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AudioUploadDialog from './AudioUploadDialog';
+import TemplateUploadDialog from './TemplateUploadDialog';
 import KnowledgeItemDetailPane from './KnowledgeItemDetailPane';
 import { cn } from '@/lib/utils';
 
@@ -48,6 +49,7 @@ const FSGKnowledgeTable = ({
   const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [audioUploadDialogOpen, setAudioUploadDialogOpen] = useState(false);
+  const [templateUploadDialogOpen, setTemplateUploadDialogOpen] = useState(false);
   const [targetCategory, setTargetCategory] = useState<string>('');
   
   // Fix category filtering - ensure we get the right items
@@ -172,6 +174,10 @@ const FSGKnowledgeTable = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setTemplateUploadDialogOpen(true)}>
+                <FileCheck size={16} className="mr-2" />
+                Create Template
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setAudioUploadDialogOpen(true)}>
                 <FileAudio size={16} className="mr-2" />
                 Upload Audio
@@ -311,6 +317,14 @@ const FSGKnowledgeTable = ({
           // Handle the uploaded item here
           console.log('Audio uploaded:', item);
           // You might want to refetch the knowledge items or add the item to the list
+        }}
+      />
+
+      <TemplateUploadDialog
+        open={templateUploadDialogOpen}
+        onOpenChange={setTemplateUploadDialogOpen}
+        onUploadComplete={() => {
+          // Refetch knowledge items when template is created
         }}
       />
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Play, Pause, Download, Edit2, Share2, FileAudio, Clock, User, Calendar, Loader2 } from 'lucide-react';
+import { X, Play, Pause, Download, Edit2, Share2, FileAudio, Clock, User, Calendar, Loader2, Copy, FileText, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +43,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -232,6 +233,33 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
     }
   };
 
+  // Template-specific functions
+  const handleCopyToClipboard = async () => {
+    if (!item.transcript_text) return;
+    
+    try {
+      await navigator.clipboard.writeText(item.transcript_text);
+      setCopySuccess(true);
+      toast.success('Template content copied to clipboard');
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (error) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    if (!item.transcript_text) return;
+    
+    const element = document.createElement('a');
+    const file = new Blob([item.transcript_text], { type: 'text/plain' });
+    element.href = URL.createObjectURL(file);
+    element.download = `${item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    toast.success('Template downloaded successfully');
+  };
+
   if (!item) return null;
 
   const formatDuration = (seconds: number) => {
@@ -292,6 +320,50 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
               </Badge>
             </div>
           </div>
+
+          {/* Template Content Section */}
+          {item.content_type === 'template' && item.transcript_text && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileText size={16} />
+                    Template Content
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleCopyToClipboard}
+                      disabled={!item.transcript_text}
+                    >
+                      {copySuccess ? <Check size={14} className="mr-1" /> : <Copy size={14} className="mr-1" />}
+                      {copySuccess ? 'Copied!' : 'Copy'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleDownloadTemplate}
+                      disabled={!item.transcript_text}
+                    >
+                      <Download size={14} className="mr-1" />
+                      Download
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-muted/30 rounded-md p-4 max-h-96 overflow-y-auto">
+                  <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed">
+                    {item.transcript_text}
+                  </pre>
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  {item.transcript_text.length} characters • {item.transcript_text.split('\n').length} lines
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Audio Player & Controls */}
           {item.content_type === 'audio' && (

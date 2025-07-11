@@ -234,11 +234,20 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
   };
 
   // Template-specific functions
+  const getTemplateContent = () => {
+    // Check for template content in metadata first, then transcript_text
+    if (item.content_type === 'template' && item.metadata?.template_content) {
+      return item.metadata.template_content;
+    }
+    return item.transcript_text || '';
+  };
+
   const handleCopyToClipboard = async () => {
-    if (!item.transcript_text) return;
+    const content = getTemplateContent();
+    if (!content) return;
     
     try {
-      await navigator.clipboard.writeText(item.transcript_text);
+      await navigator.clipboard.writeText(content);
       setCopySuccess(true);
       toast.success('Template content copied to clipboard');
       setTimeout(() => setCopySuccess(false), 2000);
@@ -248,10 +257,11 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
   };
 
   const handleDownloadTemplate = () => {
-    if (!item.transcript_text) return;
+    const content = getTemplateContent();
+    if (!content) return;
     
     const element = document.createElement('a');
-    const file = new Blob([item.transcript_text], { type: 'text/plain' });
+    const file = new Blob([content], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
     element.download = `${item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
     document.body.appendChild(element);
@@ -322,7 +332,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
           </div>
 
           {/* Template Content Section */}
-          {item.content_type === 'template' && item.transcript_text && (
+          {item.content_type === 'template' && getTemplateContent() && (
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -335,7 +345,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
                       variant="outline" 
                       size="sm"
                       onClick={handleCopyToClipboard}
-                      disabled={!item.transcript_text}
+                      disabled={!getTemplateContent()}
                     >
                       {copySuccess ? <Check size={14} className="mr-1" /> : <Copy size={14} className="mr-1" />}
                       {copySuccess ? 'Copied!' : 'Copy'}
@@ -344,7 +354,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
                       variant="outline" 
                       size="sm"
                       onClick={handleDownloadTemplate}
-                      disabled={!item.transcript_text}
+                      disabled={!getTemplateContent()}
                     >
                       <Download size={14} className="mr-1" />
                       Download
@@ -355,11 +365,11 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
               <CardContent>
                 <div className="bg-muted/30 rounded-md p-4 max-h-96 overflow-y-auto">
                   <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed">
-                    {item.transcript_text}
+                    {getTemplateContent()}
                   </pre>
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground">
-                  {item.transcript_text.length} characters • {item.transcript_text.split('\n').length} lines
+                  {getTemplateContent().length} characters • {getTemplateContent().split('\n').length} lines
                 </div>
               </CardContent>
             </Card>
@@ -436,7 +446,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
           )}
 
           {/* Summary Generation Section */}
-          {item.transcript_text && (
+          {(item.transcript_text || (item.content_type === 'template' && item.metadata?.template_content)) && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Generate Summary</CardTitle>
@@ -553,7 +563,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
           </Card>
 
           {/* Transcript */}
-          {item.transcript_text && (
+          {(item.transcript_text || (item.content_type === 'template' && item.metadata?.template_content)) && (
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -567,7 +577,7 @@ const KnowledgeItemDetailPane = ({ item, onClose }: KnowledgeItemDetailPaneProps
               <CardContent>
                 <div className="prose prose-sm max-w-none">
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {item.transcript_text}
+                    {getTemplateContent()}
                   </p>
                 </div>
               </CardContent>
